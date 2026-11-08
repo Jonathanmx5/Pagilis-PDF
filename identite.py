@@ -11,7 +11,7 @@ le PC (installation, préférences).
 NOM_AFFICHE = "Pagilis PDF"           # nom vu par l'utilisateur (fenêtre, raccourcis, Windows)
 NOM = "Pagilis"                       # nom technique : dossiers, fichiers, dépôt
 NOM_EXE = "Pagilis.exe"
-DEPOT_GITHUB = "Jonathanmx5/Pagilis"
+DEPOT_GITHUB = "Jonathanmx5/Pagilis-PDF"
 EDITEUR = "Jonathanmx5"
 PROGID_PDF = "Pagilis.pdf"            # « Ouvrir avec » pour les PDF
 CLE_REGISTRE = "Pagilis"              # entrée dans « Applications installées »

@@ -10,13 +10,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Jonathanmx5/Pagilis/releases/latest"><img alt="Télécharger" src="https://img.shields.io/github/v/release/Jonathanmx5/Pagilis?label=T%C3%A9l%C3%A9charger&style=for-the-badge&color=1F6AA5"></a>
+  <a href="https://github.com/Jonathanmx5/Pagilis-PDF/releases/latest"><img alt="Télécharger" src="https://img.shields.io/github/v/release/Jonathanmx5/Pagilis-PDF?label=T%C3%A9l%C3%A9charger&style=for-the-badge&color=1F6AA5"></a>
   <img alt="Windows 10 et 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=for-the-badge">
   <img alt="Licence AGPL-3.0" src="https://img.shields.io/badge/licence-AGPL--3.0-555?style=for-the-badge">
 </p>
 
 <p align="center">
-  <img src="docs/images/apercu.png" alt="Pagilis PDF : recherche dans un devis" width="860">
+  <img src="docs/images/modifier.png" alt="Corriger une ligne d'un devis directement dans le PDF" width="860">
 </p>
 
 ---
@@ -48,10 +48,27 @@
 Les 20 dernières retouches se défont avec **Ctrl+Z**, et **Ctrl+S** enregistre.
 Une pastille vous signale ce qui n'est pas encore sauvegardé.
 
+## En images
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/pages.png" alt="Gestion des pages en vignettes"><br>
+      <sub><b>Pages</b> : sélectionnez, pivotez, réordonnez, extrayez.</sub></td>
+    <td width="50%"><img src="docs/images/signer.png" alt="Signature posée sur un devis"><br>
+      <sub><b>Signer</b> : posez votre signature à la souris.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/accueil.png" alt="Écran d'accueil"><br>
+      <sub><b>Accueil</b> : ouvrez un PDF ou un Word, ou reprenez un fichier récent.</sub></td>
+    <td width="50%"><img src="docs/images/modifier.png" alt="Correction d'une ligne"><br>
+      <sub><b>Modifier</b> : cliquez sur une ligne, tapez, Entrée.</sub></td>
+  </tr>
+</table>
+
 ## Installer
 
 1. Téléchargez `Pagilis.exe` depuis la
-   **[dernière version](https://github.com/Jonathanmx5/Pagilis/releases/latest)**.
+   **[dernière version](https://github.com/Jonathanmx5/Pagilis-PDF/releases/latest)**.
 2. Lancez-le. C'est tout.
 
 Pour l'installer durablement, cliquez sur **Installer sur ce PC** en bas de la
