@@ -15,6 +15,10 @@
   <img alt="Licence AGPL-3.0" src="https://img.shields.io/badge/licence-AGPL--3.0-555?style=for-the-badge">
 </p>
 
+<p align="center">
+  <img src="docs/images/apercu.png" alt="Pagilis PDF : recherche dans un devis" width="860">
+</p>
+
 ---
 
 ## Pourquoi Pagilis PDF ?
