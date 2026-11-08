@@ -1,81 +1,94 @@
-# Pagilis PDF
+<p align="center">
+  <img src="ressources/logo.png" alt="Logo Pagilis PDF" width="128">
+</p>
 
-Application Windows pour lire, assembler, découper, signer et modifier des PDF,
-et rendre les scans cherchables (OCR).
+<h1 align="center">Pagilis PDF</h1>
 
-## Télécharger
+<p align="center">
+  <strong>Corrigez, organisez et signez vos PDF en quelques clics.<br>
+  Gratuit, sans compte, sans abonnement. Vos fichiers restent sur votre PC.</strong>
+</p>
 
-Dernière version : [Releases](https://github.com/Jonathanmx5/Pagilis/releases/latest).
-L'application vérifie elle-même les mises à jour à chaque démarrage.
+<p align="center">
+  <a href="https://github.com/Jonathanmx5/Pagilis/releases/latest"><img alt="Télécharger" src="https://img.shields.io/github/v/release/Jonathanmx5/Pagilis?label=T%C3%A9l%C3%A9charger&style=for-the-badge&color=1F6AA5"></a>
+  <img alt="Windows 10 et 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=for-the-badge">
+  <img alt="Licence AGPL-3.0" src="https://img.shields.io/badge/licence-AGPL--3.0-555?style=for-the-badge">
+</p>
 
-**Portable** : `Pagilis.exe` se lance tel quel, sans installation (clé USB,
-dossier Téléchargements…).
+---
 
-**Installation** (facultative) : depuis la version portable, bouton
-**Installer sur ce PC** en bas de la barre latérale. Sans droits
-administrateur : copie dans `%LOCALAPPDATA%\Programs\Pagilis`, raccourcis
-menu Démarrer et Bureau, Pagilis proposé dans « Ouvrir avec » pour les PDF.
-Désinstallation depuis *Paramètres > Applications installées* ; les
-préférences (`%LOCALAPPDATA%\Pagilis`) sont conservées.
+## Pourquoi Pagilis PDF ?
 
-**Anciennement PDF Studio** : jusqu'à la version 1.1.0, l'application
-s'appelait PDF Studio. Une installation de PDF Studio qui reçoit la mise à jour
-devient automatiquement Pagilis (nouveau dossier, raccourcis et entrée Windows ;
-l'ancienne installation est retirée), et les préférences sont reprises.
+- **Corriger un PDF comme un document.** Une faute dans un PDF ? Cliquez sur la
+  ligne, tapez, Entrée. La police d'origine est conservée.
+- **Ouvrir aussi les documents Word.** Corrigez-les dans le même écran et
+  récupérez un PDF propre.
+- **Tout est local.** Aucun envoi sur internet et aucun compte à créer. Vos
+  contrats, factures et pièces d'identité ne quittent pas votre ordinateur.
+- **Prêt en une seconde.** Un seul fichier `Pagilis.exe` suffit, sans
+  installation ni droits administrateur. Il fonctionne aussi depuis une clé USB.
+- **Toujours à jour.** Chaque nouvelle version est proposée au démarrage. Elle
+  est vérifiée avant de remplacer l'ancienne, et l'ancienne est gardée de côté.
 
-## Les fonctions
+## Ce que vous pouvez faire
 
-La barre latérale regroupe les fonctions :
+| | Fonction | En pratique |
+|---|---|---|
+| ✏️ | **Modifier le texte** | Corriger une ligne d'un clic, déplacer un bloc d'un glisser, rechercher et remplacer dans tout le document. |
+| 📄 | **Pages** | Vignettes de toutes les pages. Vous pouvez faire pivoter, supprimer, réordonner, insérer un autre PDF ou extraire une sélection. |
+| 🖋️ | **Signer** | Apposer une signature ou un tampon (image), placée à la souris, avec la taille, l'opacité et l'orientation voulues. |
+| 🔗 | **Fusionner** | Réunir plusieurs PDF en un seul, dans l'ordre choisi. |
+| ✂️ | **Découper** | Une page par fichier, toutes les N pages, ou selon vos plages (1-3, 5, 8-). |
+| 🔍 | **Reconnaître le texte (OCR)** | Rendre un scan cherchable et copiable, en français, anglais, allemand, espagnol ou italien. |
 
-- **Éditer** : *Modifier le texte*, *Pages*, *Signer* ;
-- **Assembler** : *Fusionner*, *Découper* ;
-- **Outils** : *Reconnaître le texte* (OCR des scans).
+Les 20 dernières retouches se défont avec **Ctrl+Z**, et **Ctrl+S** enregistre.
+Une pastille vous signale ce qui n'est pas encore sauvegardé.
 
-La barre du haut porte le document ouvert et ses actions : **Ouvrir** (Ctrl+O),
-**Annuler** (Ctrl+Z), **Enregistrer** (Ctrl+S). Une pastille « Non enregistré »
-signale les retouches en attente. Sans document, l'accueil propose d'en ouvrir
-un et liste les fichiers récents. Après un traitement, la barre d'état propose
-d'**Ouvrir** le résultat ou de **Continuer dessus**, sans interrompre le travail.
+## Installer
 
-## Modifier un PDF ou un Word
+1. Téléchargez `Pagilis.exe` depuis la
+   **[dernière version](https://github.com/Jonathanmx5/Pagilis/releases/latest)**.
+2. Lancez-le. C'est tout.
 
-Fonction **Modifier le texte** : ouvrir un PDF ou un document Word, puis dans
-l'aperçu cliquer sur une ligne pour la corriger (Entrée pour valider, Échap pour
-abandonner) ou faire glisser un bloc pour le déplacer. « Rechercher et
-remplacer » surligne les occurrences et les remplace dans tout le document.
-Ctrl+Z annule les 20 dernières retouches, Ctrl+S enregistre en PDF (pour un
-Word : `<nom>.pdf` à côté du document). Un Word est converti avec Microsoft
-Word, ou LibreOffice s'il n'y a pas Word ; sans l'un des deux, il ne peut pas
-être ouvert.
+Pour l'installer durablement, cliquez sur **Installer sur ce PC** en bas de la
+barre latérale. L'installation ne demande aucun droit administrateur. Elle crée
+les raccourcis du menu Démarrer et du Bureau, et ajoute Pagilis PDF dans
+« Ouvrir avec » pour vos PDF. Vous pouvez la retirer depuis *Paramètres >
+Applications installées*.
 
-## Gérer les pages
+> Le fichier n'étant pas signé numériquement, Windows SmartScreen peut afficher
+> un avertissement au premier lancement : cliquez sur *Informations
+> complémentaires*, puis sur *Exécuter quand même*.
 
-Fonction **Pages** : les vignettes de toutes les pages s'affichent ; clic,
-Ctrl+clic et Maj+clic pour sélectionner. Pivoter (↺ ↻), supprimer, monter ou
-descendre (▲ ▼), insérer un autre PDF après la sélection, extraire la sélection
-dans un nouveau PDF. Les changements s'annulent et s'enregistrent avec ceux de
-« Modifier » (même document de travail).
+## Bon à savoir
 
-## Limites connues
+- **Polices.** Le texte corrigé reprend la police d'origine quand le PDF
+  l'embarque avec tous les caractères nécessaires, ou quand elle est installée
+  sur le PC. Sinon, il est réécrit en Arial, Times New Roman ou Courier New,
+  selon le style d'origine.
+- **Une seule mise en forme par ligne corrigée.** Une ligne corrigée prend un
+  seul style : celui de son morceau le plus long.
+- **Recherche.** La recherche ne trouve pas une expression coupée entre deux
+  lignes.
+- **Scans.** Une page scannée doit d'abord passer à l'OCR pour devenir
+  modifiable. Les pages à l'envers ou penchées ne sont pas encore redressées
+  automatiquement.
+- **Fichiers Word.** Leur ouverture nécessite Microsoft Word ou LibreOffice.
+  Un document protégé par mot de passe ne s'ouvre pas. Le résultat est
+  enregistré en PDF.
+- **PDF protégés.** Un PDF protégé par mot de passe est enregistré sans mot de
+  passe.
+- **En cas de souci,** le journal se trouve dans `%LOCALAPPDATA%\Pagilis\pagilis.log`.
 
-- Remplacer / modifier / déplacer du texte : la police d'origine est reprise
-  quand le PDF la contient avec tous les caractères nécessaires, ou quand elle
-  est installée sur le PC ; sinon le texte est réécrit en Arial, Times New Roman
-  ou Courier New selon son style.
-- Pas de recherche à cheval sur deux lignes.
-- Pas de détection des pages à l'envers ou couchées à 90°.
-- Le redressement des pages penchées et le remplacement de texte sur un scan ne
-  sont pas encore disponibles.
-- Modifier : une ligne corrigée est réécrite d'un seul style (celui de son
-  morceau le plus long) ; une page scannée doit d'abord passer à l'OCR ; un PDF
-  protégé est enregistré sans mot de passe ; un Word protégé par mot de passe
-  ne s'ouvre pas ; le résultat d'un Word est un PDF, pas un Word.
-- Un .exe non signé peut être signalé par Windows Defender.
-- Journal d'erreurs : `%LOCALAPPDATA%\Pagilis\pagilis.log` (limité à 4 Mo, en 4 fichiers).
-- Annulation : 20 retouches au plus, et 300 Mo de mémoire au plus (moins d'étapes
-  sur un très gros fichier).
+Anciennement **PDF Studio** : les installations existantes passent
+automatiquement à Pagilis PDF, préférences comprises.
 
-## Développer
+---
+
+## Pour les développeurs
+
+Application Python, avec une interface CustomTkinter, le moteur PDF
+[PyMuPDF](https://pymupdf.readthedocs.io) et l'OCR Tesseract.
 
 ```bat
 python -m pip install -r requirements-dev.txt
@@ -83,65 +96,52 @@ python -m pytest tests -q
 python pagilis.py
 ```
 
-- `pdf_core.py` : toute la logique PDF, sans interface (testée).
-- `pagilis.py` : la fenêtre principale (document ouvert, traitements, barre d'état).
-- `pages/` : une page par fonction de la barre latérale (socle commun dans
-  `pages/base.py`) ; ajouter une fonction = ajouter un fichier et l'inscrire
-  dans `pages/__init__.py`.
-- `apercu.py` : l'aperçu ; `fenetres.py` : mise à jour, installation, désinstallation.
-- `theme.py` : couleurs, polices (Segoe UI), icônes (Segoe MDL2 Assets) et boutons ;
-  aucune couleur ni police n'est écrite ailleurs.
-- `ressources/` : le logo (`logo.png`) et l'icône Windows (`pagilis.ico`), produits par
-  `python outils/dessiner_logo.py`.
-- `edition.py` : copie de travail de « Modifier » ; `conversion.py` : Word → PDF.
-- `updater.py` : vérification et installation des mises à jour.
-- `installation.py` : installation sur le PC depuis la version portable.
+| Fichier | Rôle |
+|---|---|
+| `pdf_core.py` | Logique PDF pure, sans interface : texte, polices, pages, OCR. |
+| `edition.py` | Copie de travail : retouches, annulation, enregistrement. |
+| `conversion.py` | Conversion Word → PDF, avec Word ou LibreOffice. |
+| `pagilis.py` | Fenêtre principale : document ouvert, traitements en arrière-plan, barre d'état. |
+| `pages/` | Une page par fonction ; le socle commun est dans `base.py`. Pour ajouter une fonction, créez un fichier et inscrivez-le dans `__init__.py`. |
+| `apercu.py`, `fenetres.py` | Aperçu du document ; fenêtres de mise à jour et d'installation. |
+| `theme.py` | Couleurs, polices, icônes et boutons. Aucun style n'est défini ailleurs. |
+| `updater.py`, `installation.py` | Mises à jour sécurisées ; installation sans droits administrateur. |
+| `outils/dessiner_logo.py` | Génère `ressources/logo.png` et `pagilis.ico`. |
 
-Les versions des dépendances sont figées dans `requirements*.txt` : on les
-met à jour volontairement, puis on relance les tests.
+La suite comprend plus de 220 tests. La CI exige au moins 80 % de couverture.
+Les versions des dépendances sont figées dans `requirements*.txt`.
 
-## Compiler
+**Compiler** : `build_exe.bat` analyse le code, lance les tests et produit
+`dist\Pagilis.exe`.
 
-`build_exe.bat` installe les dépendances, récupère les fichiers de langue
-Tesseract, analyse le code, lance les tests et produit `dist\Pagilis.exe`.
+**Publier** :
 
-## Publier une version
-
-1. Écrire les nouveautés dans `CHANGELOG.md`, section `## [1.2.0]` : elles
-   s'affichent dans la fenêtre de mise à jour, et la CI refuse de publier une
+1. Écrivez les notes de la version dans `CHANGELOG.md`, sous `## [X.Y.Z]`.
+   Elles s'affichent dans la fenêtre de mise à jour, et la CI refuse une
    version sans notes.
-2. Pousser un tag, la CI fait le reste (tests, exe, auto-vérification de l'exe,
-   `version.json`, release) :
+2. Poussez le tag :
 
-```bat
-git tag v1.2.0-beta.1
-git push origin v1.2.0-beta.1
-```
+   ```bat
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
+   ```
 
-Une **bêta** (`-beta.N`) est publiée comme pré-version GitHub : l'application
-ne la propose jamais (seule la dernière version publiée pour tous l'est), on la
-télécharge à la main pour l'essayer. Quand elle a fait ses preuves, publier
-`v1.2.0` pour tous.
+   La CI lance les tests, construit l'exe, vérifie l'exe, puis publie
+   `version.json` et la release.
 
-Numérotation : CORRECTIF (1.2.1) = corrections seulement ; MINEUR (1.3.0) =
-nouveautés ; MAJEUR (2.0.0) = changements qui cassent des habitudes.
+Un tag `-beta.N` publie une pré-version que l'application ne propose jamais
+d'elle-même.
 
-Pour un exe d'essai sans publication : onglet **Actions > Release > Run
-workflow**, puis télécharger l'artefact.
+**Sûreté des mises à jour** :
 
-## Sûreté des mises à jour
-
-- Empreinte SHA-256 vérifiée après téléchargement.
-- La nouvelle version doit réussir `Pagilis.exe --verifier` (PDF, OCR,
-  interface) **avant** de remplacer l'ancienne ; sinon l'ancienne est conservée.
-- La version remplacée est sauvegardée dans
+- L'empreinte SHA-256 est vérifiée après le téléchargement.
+- La nouvelle version doit réussir `Pagilis.exe --verifier` avant de remplacer
+  l'ancienne.
+- La version précédente est sauvegardée dans
   `%LOCALAPPDATA%\Pagilis\version-precedente`.
-- Si le remplacement échoue (fichier verrouillé), il est abandonné après 30
-  essais et l'ancienne version est restaurée.
+- Si le remplacement échoue, l'ancienne version est restaurée.
 
 ## Licence
 
-Pagilis est un logiciel libre sous licence
-[GNU AGPL-3.0](LICENSE), comme la bibliothèque PyMuPDF qu'il utilise.
-Toute copie distribuée, modifiée ou non, doit rester sous cette licence et
-donner accès à son code source.
+Pagilis PDF est un logiciel libre, distribué sous licence [GNU AGPL-3.0](LICENSE),
+comme PyMuPDF.
