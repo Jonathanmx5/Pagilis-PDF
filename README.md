@@ -40,7 +40,7 @@
 |---|---|---|
 | ✏️ | **Modifier le texte** | Corriger une ligne d'un clic, déplacer un bloc d'un glisser, rechercher et remplacer dans tout le document. |
 | 📄 | **Pages** | Vignettes de toutes les pages. Vous pouvez faire pivoter, supprimer, réordonner, insérer un autre PDF ou extraire une sélection. |
-| 🖋️ | **Signer** | Apposer une signature ou un tampon (image), placée à la souris, avec la taille, l'opacité et l'orientation voulues. |
+| 🖋️ | **Signer** | Créez votre signature (tracée à la main ou écrite dans une police manuscrite), puis posez-la à la souris. Une image (tampon, signature scannée) marche aussi. |
 | 🔗 | **Fusionner** | Réunir plusieurs PDF en un seul, dans l'ordre choisi. |
 | ✂️ | **Découper** | Une page par fichier, toutes les N pages, ou selon vos plages (1-3, 5, 8-). |
 | 🔍 | **Reconnaître le texte (OCR)** | Rendre un scan cherchable et copiable, en français, anglais, allemand, espagnol ou italien. |
@@ -55,7 +55,7 @@ Une pastille vous signale ce qui n'est pas encore sauvegardé.
     <td width="50%"><img src="docs/images/pages.png" alt="Gestion des pages en vignettes"><br>
       <sub><b>Pages</b> : sélectionnez, pivotez, réordonnez, extrayez.</sub></td>
     <td width="50%"><img src="docs/images/signer.png" alt="Signature posée sur un devis"><br>
-      <sub><b>Signer</b> : posez votre signature à la souris.</sub></td>
+      <sub><b>Signer</b> : créez votre signature une fois, posez-la à la souris.</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/accueil.png" alt="Écran d'accueil"><br>

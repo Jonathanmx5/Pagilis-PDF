@@ -13,6 +13,7 @@ from PIL import Image, ImageTk
 
 import identite
 import pdf_core as core
+import signature
 import theme
 from pages.base import PageFonction
 
@@ -31,8 +32,11 @@ class PageTampon(PageFonction):
         self._geste = None  # décalage du clic dans l'image pendant un glisser
         self.section("Image")
         ligne = self.ligne()
-        theme.bouton(ligne, "Choisir une image…", self.choisir_tampon, icone_nom="ouvrir").pack(side="left")
-        self.label_tampon = ctk.CTkLabel(self.cadre, text="PNG ou JPG : signature scannée, tampon…",
+        theme.bouton(ligne, "Créer ma signature…", self.creer_signature, icone_nom="signer").pack(
+            side="left", fill="x", expand=True, padx=(0, 6))
+        theme.bouton(ligne, "Image…", self.choisir_tampon, icone_nom="ouvrir").pack(side="left")
+        self.label_tampon = ctk.CTkLabel(self.cadre, text="Créez votre signature, ou choisissez une image "
+                                         "(PNG ou JPG : signature scannée, tampon…).",
                                          anchor="w", font=theme.police(12), text_color=theme.TEXTE_2,
                                          wraplength=260, justify="left")
         self.label_tampon.pack(fill="x", padx=16, pady=(2, 2))
@@ -65,6 +69,9 @@ class PageTampon(PageFonction):
         for entree in (self.entree_x, self.entree_y):
             entree.bind("<KeyRelease>", lambda _e: self.apercu.redessiner())
         self.bouton_action("Poser la signature", self.lancer_tampon, icone_nom="signer")
+        memorisee = signature.signature_enregistree(self.app.dossier_donnees)
+        if memorisee:
+            self.utiliser_image(memorisee, "Ma signature")
 
     def _rotation(self) -> int:
         return int(self.rotation_tampon.get().rstrip("°"))
@@ -74,13 +81,22 @@ class PageTampon(PageFonction):
                                             filetypes=[("Images", "*.png *.jpg *.jpeg")])
         if not chemin:
             return
+        self.utiliser_image(chemin, os.path.basename(chemin))
+
+    def creer_signature(self):
+        """Fenêtre « Créer ma signature » ; la signature créée devient l'image à poser."""
+        signature.FenetreSignature(self.app, self.app.dossier_donnees,
+                                   lambda chemin: self.utiliser_image(chemin, "Ma signature"))
+
+    def utiliser_image(self, chemin: str, libelle: str):
         try:
             with Image.open(chemin) as im:
                 self.ratio_tampon = im.height / im.width
         except OSError:
             return messagebox.showerror(identite.NOM_AFFICHE, "Image illisible.")
         self.image_tampon = chemin
-        self.label_tampon.configure(text=os.path.basename(chemin), text_color=theme.TEXTE)
+        self._cache_tampon = (None, None)  # une signature recréée garde le même chemin
+        self.label_tampon.configure(text=libelle, text_color=theme.TEXTE)
         self.apercu.redessiner()
 
     def _rect_tampon(self) -> fitz.Rect | None:

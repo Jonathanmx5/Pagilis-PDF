@@ -52,6 +52,7 @@ def ui(monkeypatch, tmp_path):
     monkeypatch.setattr(s, "sauver_config", lambda c: None)
     monkeypatch.setattr(s, "charger_config", lambda: {})
     monkeypatch.setattr(updater, "UPDATE_MANIFEST_URL", "")
+    monkeypatch.setattr(s, "DOSSIER_DONNEES", str(tmp_path / "donnees"))  # pas la vraie signature
     for nom in ("showinfo", "showwarning", "showerror"):
         monkeypatch.setattr(s.messagebox, nom, lambda titre, texte, _n=nom, **k: d.messages.append((_n, titre, texte)))
     monkeypatch.setattr(s.messagebox, "askyesno", lambda *a, **k: d.oui_non)
@@ -1268,3 +1269,67 @@ def test_uninstall_asks_before_removing(monkeypatch, confirme):
     monkeypatch.setattr(installation, "desinstaller", lambda **k: retire.append(k))
     fenetres.desinstaller_avec_confirmation()
     assert retire == ([{"attendre_pid": None}] if confirme else [])
+
+
+class _Clic:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+
+
+def test_signature_drawn_then_used_and_remembered(ui, contrat, tmp_path):
+    s, creer, d = ui
+    app = creer()
+    tampon = app.fonctions["Signature / Tampon"]
+    assert tampon.image_tampon is None, "aucune signature au premier lancement"
+
+    def scenario():
+        app.charger_fichier(str(contrat))
+        app.afficher_page("Signature / Tampon")
+        tampon.creer_signature()
+        yield 300
+        fenetre = next(w for w in app.winfo_children() if hasattr(w, "traits"))
+        fenetre.valider()  # rien de tracé : la fenêtre reste et le dit
+        assert fenetre.winfo_exists() and "Signez" in fenetre.message.cget("text")
+        fenetre._debut_trait(_Clic(40, 120))
+        for x in range(45, 300, 15):
+            fenetre._suite_trait(_Clic(x, 120 - (x % 60)))
+        fenetre.encre.set("Noire")
+        fenetre._changer_encre()
+        fenetre.valider()
+        yield 100
+        assert tampon.image_tampon and os.path.basename(tampon.image_tampon) == "signature.png"
+        assert tampon.label_tampon.cget("text") == "Ma signature"
+        assert 0 < tampon.ratio_tampon < 1
+        app._souris_appui(fitz.Point(300, 300))
+        app._souris_relache(fitz.Point(300, 300))
+        assert len(superpositions(app)) >= 2
+
+    executer(app, scenario)
+    # Au lancement suivant, la signature est reprise d'office.
+    app.destroy()
+    autre = creer()
+    assert autre.fonctions["Signature / Tampon"].label_tampon.cget("text") == "Ma signature"
+
+
+def test_signature_written_with_handwriting_font(ui):
+    s, creer, d = ui
+    app = creer()
+    tampon = app.fonctions["Signature / Tampon"]
+
+    def scenario():
+        tampon.creer_signature()
+        yield 300
+        fenetre = next(w for w in app.winfo_children() if hasattr(w, "traits"))
+        fenetre.onglets.set("Écrire")
+        fenetre.valider()
+        assert "nom" in fenetre.message.cget("text")
+        fenetre.nom.set("Jean Dupont")
+        yield 50
+        assert fenetre.apercu.cget("image") is not None
+        fenetre.valider()
+        yield 100
+        assert tampon.label_tampon.cget("text") == "Ma signature"
+        with Image.open(tampon.image_tampon) as im:
+            assert im.mode == "RGBA" and im.width > im.height
+
+    executer(app, scenario)

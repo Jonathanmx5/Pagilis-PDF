@@ -11,6 +11,11 @@ Numérotation : MAJEUR.MINEUR.CORRECTIF.
 Une bêta (tag `v1.2.0-beta.1`) reprend les notes de sa version (`1.2.0`) si
 elle n'a pas de section propre.
 
+## [1.8.0]
+
+- Signer : créez votre signature dans le logiciel, en la traçant à la souris, au doigt ou au stylet, ou en écrivant votre nom dans une police manuscrite. Encre noire ou bleue.
+- La signature créée est gardée sur ce PC et reprise automatiquement à chaque signature.
+
 ## [1.7.2]
 
 - Plus rapide sur les longs documents : « Pages » s'affiche et pivote en une
