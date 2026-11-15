@@ -82,6 +82,7 @@ class MainActivity : Activity() {
         afficherAccueil()
         majEtat()
         traiterIntention(intent)
+        chercherMiseAJour()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -217,10 +218,78 @@ class MainActivity : Activity() {
         return b
     }
 
+    // ------------------------------------------------------------- mise à jour
+
+    val versionInstallee: String by lazy {
+        packageManager.getPackageInfo(packageName, 0).versionName ?: "0.0.0"
+    }
+    private var nouveaute: MiseAJour.Publication? = null
+    private var boutonMiseAJour: android.widget.Button? = null
+
+    /** Au démarrage, sans gêner : si une version plus récente existe, l'accueil le dit. */
+    private fun chercherMiseAJour() {
+        Thread {
+            val n = MiseAJour.chercher(versionInstallee) ?: return@Thread
+            runOnUiThread { nouveaute = n; afficherAccueil() }
+        }.start()
+    }
+
+    private fun bandeauMiseAJour(n: MiseAJour.Publication): View {
+        val carte = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = Theme.fond(Theme.ACCENT_DOUX, dp(14f), Theme.ACCENT, dp(1))
+            setPadding(dp(20), dp(16), dp(20), dp(16))
+        }
+        carte.addView(Theme.titre(this, "Pagilis PDF ${n.version} est disponible", 17f))
+        val notes = n.notes.lines().map { it.trim().removePrefix("- ").removePrefix("* ") }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }.take(4).joinToString("\n") { "• $it" }
+        if (notes.isNotEmpty()) carte.addView(Theme.texte(this, notes, Theme.TEXTE_2, 13f).apply { setPadding(0, dp(6), 0, 0) })
+        val ligne = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(12), 0, 0) }
+        ligne.addView(Theme.texte(this, "Vous avez la version $versionInstallee.", Theme.TEXTE_2, 13f),
+            LinearLayout.LayoutParams(0, -2, 1f))
+        val bouton = Theme.bouton(this, "Mettre à jour", Theme.Style.PRINCIPAL) { mettreAJour(n) }
+        boutonMiseAJour = bouton
+        ligne.addView(bouton)
+        carte.addView(ligne)
+        return carte
+    }
+
+    private fun mettreAJour(n: MiseAJour.Publication) {
+        if (!MiseAJour.peutInstaller(this)) {
+            AlertDialog.Builder(this).setTitle("Autoriser la mise à jour")
+                .setMessage("Android va vous demander d'autoriser Pagilis PDF à installer des applications. " +
+                    "Activez l'autorisation, revenez ici, puis touchez à nouveau « Mettre à jour ».")
+                .setPositiveButton("Continuer") { _, _ -> MiseAJour.demanderAutorisation(this) }
+                .setNegativeButton("Annuler", null).show()
+            return
+        }
+        val bouton = boutonMiseAJour
+        bouton?.let { Theme.activer(it, false) }
+        Thread {
+            try {
+                val apk = MiseAJour.telecharger(n, Partage.dossier(this)) { pc ->
+                    runOnUiThread { bouton?.text = "Téléchargement… $pc %" }
+                }
+                runOnUiThread {
+                    bouton?.text = "Mettre à jour"
+                    bouton?.let { Theme.activer(it, true) }
+                    MiseAJour.installer(this, apk)
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    bouton?.text = "Mettre à jour"
+                    bouton?.let { Theme.activer(it, true) }
+                    erreur(if (e is ErreurPdf) e else ErreurPdf("Téléchargement impossible. Vérifiez la connexion, puis réessayez."))
+                }
+            }
+        }.start()
+    }
+
     private fun afficherAccueil() {
         accueil.removeAllViews()
         accueil.visibility = if (copie == null) View.VISIBLE else View.GONE
         if (copie != null) return
+        nouveaute?.let { accueil.addView(bandeauMiseAJour(it), LinearLayout.LayoutParams(dp(520), -2).apply { bottomMargin = dp(36) }) }
         accueil.addView(ImageView(this).apply { setImageResource(R.mipmap.ic_launcher) }, LinearLayout.LayoutParams(dp(96), dp(96)))
         accueil.addView(Theme.titre(this, "Ouvrez un PDF pour commencer", 22f).apply { gravity = Gravity.CENTER; setPadding(0, dp(18), 0, dp(6)) })
         accueil.addView(Theme.texte(this, "Signez, ajoutez du texte, réorganisez les pages, fusionnez, découpez.").apply { gravity = Gravity.CENTER })
@@ -236,6 +305,8 @@ class MainActivity : Activity() {
                 }, LinearLayout.LayoutParams(dp(420), dp(46)))
             }
         }
+        accueil.addView(Theme.texte(this, "Version $versionInstallee", Theme.TEXTE_DISCRET, 12f).apply { setPadding(0, dp(28), 0, 0); gravity = Gravity.CENTER },
+            LinearLayout.LayoutParams(-2, -2))
     }
 
     // ------------------------------------------------------------- outils

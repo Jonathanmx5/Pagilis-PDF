@@ -46,7 +46,8 @@ android {
         release {
             isMinifyEnabled = false
             // Tablettes et téléphones (ARM) : l'APK publié n'embarque pas MuPDF pour PC (x86).
-            ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+            // (-PtoutesArchis : aussi x86, pour essayer une version signée sur l'émulateur.)
+            if (findProperty("toutesArchis") == null) ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
             signingConfig = signingConfigs.findByName("publication") ?: signingConfigs.getByName("debug")
         }
     }

@@ -12,7 +12,7 @@ import android.provider.OpenableColumns
 import java.io.File
 
 /**
- * Donne à une autre application (mail, messagerie…) un PDF à partager, en lecture
+ * Donne à une autre application (mail, messagerie, installeur d'Android) un fichier, en lecture
  * seule, sans permission de stockage. Seuls les fichiers du dossier de partage sont servis.
  */
 class Partage : ContentProvider() {
@@ -29,7 +29,8 @@ class Partage : ContentProvider() {
     }
 
     override fun onCreate() = true
-    override fun getType(uri: Uri) = "application/pdf"
+    override fun getType(uri: Uri) =
+        if (uri.lastPathSegment.orEmpty().endsWith(".apk")) "application/vnd.android.package-archive" else "application/pdf"
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor =
         ParcelFileDescriptor.open(fichier(uri), ParcelFileDescriptor.MODE_READ_ONLY)
 
