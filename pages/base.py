@@ -82,6 +82,10 @@ class PageFonction:
     def montree(self) -> None:
         """La page vient d'être affichée."""
 
+    def fichiers_deposes(self, chemins: list[str]) -> bool:
+        """Fichiers glissés sur la fenêtre ; vrai si la page s'en est servie (sinon ils s'ouvrent)."""
+        return False
+
     # -------------------------------------------------- éléments de formulaire
 
     def section(self, titre: str, parent=None):

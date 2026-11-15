@@ -190,3 +190,12 @@ def test_undo_back_to_saved_state_is_not_modified(ed, tmp_path):
     assert not ed.modifie  # revenu à l'état enregistré
     ed.annuler()
     assert ed.modifie  # avant l'enregistrement : différent du fichier enregistré
+
+
+def test_added_text_is_undoable(ed):
+    assert ed.ajouter(0, fitz.Point(60, 400), "Mention ajoutée", 12, (0, 0, 0))
+    assert "Mention ajoutée" in texte(ed.doc) and ed.modifie
+    ed.annuler()
+    assert "Mention ajoutée" not in texte(ed.doc) and not ed.modifie
+    assert not ed.ajouter(0, fitz.Point(60, 400), "", 12, (0, 0, 0))
+    assert not ed.peut_annuler

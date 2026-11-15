@@ -66,6 +66,16 @@ class PageFusion(PageFonction):
             self.app.memoriser_dossier(chemins[0])
             self._rafraichir_fusion()
 
+    def fichiers_deposes(self, chemins: list[str]) -> bool:
+        pdf = [c for c in chemins if c.lower().endswith(".pdf") and os.path.isfile(c)]
+        if not pdf:
+            return False
+        self.liste_fusion.extend(pdf)
+        self.app.memoriser_dossier(pdf[0])
+        self._rafraichir_fusion()
+        self.app.statut(f"{len(pdf)} PDF ajouté(s) à la liste.")
+        return True
+
     def deplacer_fusion(self, sens: int):
         """Monte ou descend le fichier SÉLECTIONNÉ."""
         i = self.selection_fusion

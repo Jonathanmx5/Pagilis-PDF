@@ -38,8 +38,8 @@
 
 | | Fonction | En pratique |
 |---|---|---|
-| ✏️ | **Modifier le texte** | Corriger une ligne d'un clic, déplacer un bloc d'un glisser, rechercher et remplacer dans tout le document. |
-| 📄 | **Pages** | Vignettes de toutes les pages. Vous pouvez faire pivoter, supprimer, réordonner, insérer un autre PDF ou extraire une sélection. |
+| ✏️ | **Modifier le texte** | Corriger une ligne d'un clic, déplacer un bloc d'un glisser, ajouter du texte n'importe où (date, mention, formulaire), rechercher et remplacer dans tout le document. |
+| 📄 | **Pages** | Vignettes de toutes les pages : glissez-les pour changer l'ordre, pivotez, supprimez, insérez un autre PDF ou extrayez une sélection. |
 | 🖋️ | **Signer** | Créez votre signature (tracée à la main ou écrite dans une police manuscrite), puis posez-la à la souris. Une image (tampon, signature scannée) marche aussi. |
 | 🔗 | **Fusionner** | Réunir plusieurs PDF en un seul, dans l'ordre choisi. |
 | ✂️ | **Découper** | Une page par fichier, toutes les N pages, ou selon vos plages (1-3, 5, 8-). |

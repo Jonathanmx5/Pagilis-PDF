@@ -1333,3 +1333,112 @@ def test_signature_written_with_handwriting_font(ui):
             assert im.mode == "RGBA" and im.width > im.height
 
     executer(app, scenario)
+
+
+def test_add_text_mode_writes_where_clicked_and_undoes(ui, contrat):
+    s, creer, d = ui
+    app = creer()
+    m = app.fonctions["Modifier"]
+
+    def scenario():
+        ouvrir_modifier(app, contrat)
+        app.apercu.aller(0)
+        yield 300
+        m.basculer_ajout()
+        assert m.mode_ajout and "Cliquez" in app.etat.cget("text")
+        m.taille_ajout.set("14")
+        m.couleur_ajout.set("Bleu")
+        cliquer(app, fitz.Point(300, 600))  # zone vide : pas de ligne à corriger
+        yield 50
+        assert m.saisie is not None and m.saisie.get() == ""
+        m.saisie.insert(0, "Lu et approuvé")
+        m._valider_saisie()
+        yield 200
+        assert m.saisie is None and app.edition.modifie
+        mots = [w for w in app.edition.doc[0].get_text("words") if w[4] in ("Lu", "approuvé")]
+        assert len(mots) == 2 and abs(mots[0][0] - 300) < 3
+        assert m.mode_ajout, "le mode reste actif pour ajouter plusieurs mentions"
+        # Même sur une ligne existante, le mode ajout ajoute au lieu de corriger.
+        cliquer(app, centre_mot(app.apercu.page, "Montant"))
+        yield 50
+        assert m.saisie is not None and m.saisie.get() == ""
+        m._fermer_saisie()
+        m.basculer_ajout()
+        assert not m.mode_ajout
+        m.annuler_retouche()
+        assert "approuvé" not in app.edition.doc[0].get_text()
+
+    executer(app, scenario)
+
+
+def test_dropping_a_pdf_on_the_window_opens_it(ui, contrat, tmp_path):
+    s, creer, d = ui
+    app = creer()
+    texte = tmp_path / "notes.txt"
+    texte.write_text("x")
+
+    def scenario():
+        yield 300
+        app.deposer([str(texte), str(contrat)])
+        yield 400
+        assert app.chemin_pdf == str(contrat), "le premier fichier ouvrable est ouvert"
+        app.deposer([str(texte)])
+        assert "PDF" in app.etat.cget("text")
+
+    executer(app, scenario)
+
+
+def test_dropping_pdfs_on_merge_adds_them_to_the_list(ui, contrat, tmp_path):
+    s, creer, d = ui
+    app = creer()
+    autre = tmp_path / "autre.pdf"
+    fitz.open(contrat).save(autre)
+
+    def scenario():
+        app.afficher_page("Fusion")
+        yield 100
+        app.deposer([str(contrat), str(autre)])
+        assert app.fonctions["Fusion"].liste_fusion == [str(contrat), str(autre)]
+        assert app.chemin_pdf is None
+
+    executer(app, scenario)
+
+
+def test_drag_thumbnail_reorders_pages_and_undoes(ui, tmp_path):
+    s, creer, d = ui
+    chemin = tmp_path / "six.pdf"
+    doc = fitz.open()
+    for i in range(6):
+        doc.new_page().insert_text((50, 50), f"page{i}")
+    doc.save(chemin)
+    app = creer()
+    g = app.fonctions["Pages"]
+
+    def ordre():
+        return [int(p.get_text().strip()[4:]) for p in app.edition.doc]
+
+    def scenario():
+        app.charger_fichier(str(chemin))
+        app.afficher_page("Pages")
+        yield 300
+        # Glisser la vignette 5 (indice 4) au début de la 2e case (avant la page d'indice 1).
+        depart = g._centre(4)
+        x1, y1, *_ = g._position(1)
+        g._appui_toile(depart[0], depart[1], 0)
+        g._glisse_toile(depart[0] - 30, depart[1] - 40)
+        g._glisse_toile(x1 + 10, y1 + 40)
+        assert g.toile.find_withtag("insertion"), "repère d'insertion affiché"
+        g._relache_toile(x1 + 10, y1 + 40)
+        yield 100
+        assert ordre() == [0, 4, 1, 2, 3, 5] and g.selection == {1}
+        assert not g.toile.find_withtag("insertion")
+        # Un simple clic (sans bouger) sélectionne sans rien déplacer.
+        c = g._centre(3)
+        g._appui_toile(c[0], c[1], 0)
+        g._relache_toile(c[0], c[1])
+        assert g.selection == {3} and ordre() == [0, 4, 1, 2, 3, 5]
+        g.annuler_retouche()
+        yield 100
+        assert ordre() == list(range(6))
+
+    executer(app, scenario)

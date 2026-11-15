@@ -27,6 +27,10 @@ MESSAGES_POLICE = {
     core.LIGNE_EFFACEE: "Ligne effacée.",
 }
 
+# Couleurs du texte ajouté (RVB de 0 à 1).
+COULEURS_AJOUT = {"Noir": (0, 0, 0), "Bleu": (0.08, 0.2, 0.55)}
+TAILLES_AJOUT = ["10", "12", "14", "18"]
+
 
 class PageModifier(PageCopie):
     nom = "Modifier"
@@ -42,10 +46,21 @@ class PageModifier(PageCopie):
         self._fenetre_saisie = None   # élément du canevas qui porte la zone
         # (départ, ligne sous la souris, bloc, point courant si glisser)
         self._geste = None
+        self.mode_ajout = False
+        self._point_ajout: fitz.Point | None = None  # où écrire le texte ajouté (repère affiché)
         self.resultats_recherche: dict[int, list[fitz.Rect]] = {}
         self.section("Dans le document")
         self.aide("Cliquez sur une ligne pour la corriger : Entrée valide, Échap annule. "
                   "Faites glisser un bloc de texte pour le déplacer.")
+
+        self.section("Ajouter du texte")
+        self.aide("Une date, une mention, un champ de formulaire : activez, cliquez sur la page, tapez.")
+        self.taille_ajout = ctk.StringVar(value="12")
+        self.segments("Taille", TAILLES_AJOUT, self.taille_ajout)
+        self.couleur_ajout = ctk.StringVar(value="Noir")
+        self.segments("Couleur", list(COULEURS_AJOUT), self.couleur_ajout)
+        self.bouton_ajout = theme.bouton(self.cadre, "Ajouter du texte", self.basculer_ajout, icone_nom="ajouter")
+        self.bouton_ajout.pack(fill="x", padx=16, pady=(8, 4))
 
         self.section("Rechercher et remplacer")
         self.entree_recherche = self.champ("", "")
@@ -61,6 +76,36 @@ class PageModifier(PageCopie):
         theme.bouton(ligne, "Tout remplacer", self.remplacer_tout).pack(side="left", fill="x", expand=True)
         self.cadre_resultats = ctk.CTkFrame(self.cadre, fg_color="transparent")
         self.cadre_resultats.pack(fill="x", pady=(6, 12))
+
+    # ------------------------------------------------------- ajouter du texte
+
+    def basculer_ajout(self):
+        """Active ou coupe le mode « Ajouter du texte » (un clic sur la page ouvre une zone vide)."""
+        if not self.mode_ajout and self.edition is None:
+            return self.app.exiger_pdf()
+        self._regler_ajout(not self.mode_ajout)
+        if self.mode_ajout:
+            self.app.statut("Cliquez sur la page à l'endroit du texte à ajouter. Échap ou ce bouton pour arrêter.")
+        else:
+            self.app.statut("Mode ajout de texte arrêté.")
+
+    def _regler_ajout(self, actif: bool):
+        self.mode_ajout = actif
+        self._fermer_saisie()
+        if actif:
+            self.bouton_ajout.configure(text="Arrêter l'ajout de texte", fg_color=theme.ACCENT,
+                                        hover_color=theme.ACCENT_SURVOL)
+        else:
+            self.bouton_ajout.configure(text="Ajouter du texte", fg_color=theme.SURFACE_2,
+                                        hover_color=theme.SURFACE_3)
+        self.apercu.canevas.configure(cursor="xterm" if actif else "")
+
+    def peut_quitter(self, vers) -> bool:
+        if not super().peut_quitter(vers):
+            return False
+        if self.mode_ajout:
+            self._regler_ajout(False)
+        return True
 
     # ------------------------------------------------------- crochets
 
@@ -114,6 +159,8 @@ class PageModifier(PageCopie):
         self._fermer_saisie()
         if self.edition is None or self.app.travaux_en_cours:
             return
+        if self.mode_ajout:
+            return  # le relâchement ouvre la zone d'ajout
         page = self.apercu.page
         ligne = core.line_at(page, point)
         bloc = ligne.block_rect if ligne else next(
@@ -132,6 +179,8 @@ class PageModifier(PageCopie):
             self.apercu.redessiner()
 
     def relache(self, point):
+        if self.mode_ajout and self.edition is not None and not self.app.travaux_en_cours:
+            return self._ouvrir_ajout(point)
         if not self._geste:
             return
         depart, ligne, bloc, courant = self._geste
@@ -168,7 +217,35 @@ class PageModifier(PageCopie):
         self._poser_saisie()
         self.saisie.focus_set()
 
+    def _ouvrir_ajout(self, point: fitz.Point):
+        """Zone de saisie vide posée au point cliqué ; Entrée écrit le texte à cet endroit."""
+        self._fermer_saisie()
+        taille = float(self.taille_ajout.get())
+        self.saisie = ctk.CTkEntry(self.apercu.canevas, width=260, height=max(int(taille * self.apercu.zoom) + 12, 28),
+                                   font=ctk.CTkFont(size=max(9, round(taille * self.apercu.zoom * 0.9))),
+                                   placeholder_text="Texte à ajouter")
+        self.saisie.bind("<Return>", lambda _e: self._valider_saisie())
+        self.saisie.bind("<KP_Enter>", lambda _e: self._valider_saisie())
+        self.saisie.bind("<Escape>", lambda _e: self._echap_ajout())
+        self._point_ajout = point
+        self._contexte_saisie = (self.apercu.index, self.apercu.zoom, self.apercu.decalage)
+        self._poser_saisie()
+        self.saisie.focus_set()
+
+    def _echap_ajout(self):
+        if self.saisie is not None and self.saisie.get().strip():
+            self._fermer_saisie()  # première Échap : abandonne ce texte
+        else:
+            self._regler_ajout(False)  # zone vide : arrête le mode
+            self.app.statut("Mode ajout de texte arrêté.")
+
     def _poser_saisie(self):
+        if self._point_ajout is not None:
+            x, y = self.apercu.vers_canevas(self._point_ajout.x, self._point_ajout.y)
+            hauteur = int(self.saisie.cget("height"))
+            self._fenetre_saisie = self.apercu.canevas.create_window(
+                x - 8, y - hauteur / 2, anchor="nw", window=self.saisie)
+            return
         x0, y0, _x1, y1 = self.apercu.rect_canevas(self._ligne_saisie.rect)
         hauteur = max(int(y1 - y0) + 10, 28)
         self._fenetre_saisie = self.apercu.canevas.create_window(
@@ -181,8 +258,16 @@ class PageModifier(PageCopie):
                 self.apercu.canevas.delete(self._fenetre_saisie)
             self.saisie.destroy()
         self.saisie = self._ligne_saisie = self._contexte_saisie = self._fenetre_saisie = None
+        self._point_ajout = None
 
     def _valider_saisie(self):
+        if self._point_ajout is not None:
+            point, index, texte = self._point_ajout, self.apercu.index, self.saisie.get()
+            taille, couleur = float(self.taille_ajout.get()), COULEURS_AJOUT[self.couleur_ajout.get()]
+            self._fermer_saisie()
+            if self.retoucher(lambda: self.edition.ajouter(index, point, texte, taille, couleur)):
+                self.app.statut("Texte ajouté. Cliquez ailleurs pour en ajouter, Ctrl+Z pour annuler.")
+            return
         ligne, index, texte = self._ligne_saisie, self.apercu.index, self.saisie.get()
         self._fermer_saisie()
         centre = fitz.Point((ligne.rect.x0 + ligne.rect.x1) / 2, (ligne.rect.y0 + ligne.rect.y1) / 2)

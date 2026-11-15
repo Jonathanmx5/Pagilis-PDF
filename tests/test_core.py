@@ -676,3 +676,74 @@ def test_shrink_not_computed_when_new_text_is_not_longer(monkeypatch):
     assert appels == []
     core.replace_text(doc, "950", "95 000 000", [0], shrink_if_longer=True)
     assert len(appels) == 1
+
+
+# ------------------------------------------------------------- ajouter du texte
+
+
+def test_add_text_at_clicked_point_with_accents():
+    doc = fitz.open()
+    page = doc.new_page(width=595, height=842)
+    assert core.add_text(doc, 0, fitz.Point(100, 200), "Lu et approuvé, le 15/11/2026 — 12 €", 14,
+                         (0, 0, 0.6))
+    mots = page.get_text("words")
+    texte = " ".join(m[4] for m in mots)
+    assert "approuvé," in texte and "€" in texte
+    premier = fitz.Rect(mots[0][:4])
+    # Le clic marque le début du texte, au milieu de sa hauteur.
+    assert abs(premier.x0 - 100) < 3 and premier.y0 < 200 < premier.y1
+    span = page.get_text("dict")["blocks"][0]["lines"][0]["spans"][0]
+    assert round(span["size"]) == 14 and span["color"] == 0x000099
+
+
+def test_add_text_upright_on_rotated_page():
+    doc = fitz.open()
+    page = doc.new_page(width=595, height=842)
+    page.set_rotation(90)
+    assert core.add_text(doc, 0, fitz.Point(150, 120), "Bon pour accord", 12, (0, 0, 0))
+    rect = core.find_text_rects(doc, "Bon pour accord")[0][0]  # repère affiché
+    assert rect.width > rect.height, "droit à l'affichage"
+    assert abs(rect.x0 - 150) < 3 and rect.y0 < 120 < rect.y1
+
+
+def test_add_empty_text_does_nothing():
+    doc = fitz.open()
+    doc.new_page()
+    assert not core.add_text(doc, 0, fitz.Point(50, 50), "   ", 12, (0, 0, 0))
+    assert not doc[0].get_text().strip()
+
+
+def test_search_treats_non_breaking_space_as_space():
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((60, 100), "Montant total : 1 200 euros", fontsize=12)
+    assert core.find_text_rects(doc, "montant total : 1")[0]
+    assert core.replace_text(doc, "total : 1 200", "total : 900", [0]) == 1
+
+
+def _doc_numerote(n):
+    doc = fitz.open()
+    for i in range(n):
+        doc.new_page().insert_text((50, 50), f"page{i}")
+    return doc
+
+
+def _ordre(doc):
+    return [int(p.get_text().strip()[4:]) for p in doc]
+
+
+def test_place_pages_moves_selection_to_slot():
+    doc = _doc_numerote(6)
+    assert core.place_pages(doc, [4], 1) == [1]
+    assert _ordre(doc) == [0, 4, 1, 2, 3, 5]
+    doc = _doc_numerote(6)
+    # Pages non contiguës déposées à la fin : elles se suivent, dans leur ordre.
+    assert core.place_pages(doc, [0, 2], 6) == [4, 5]
+    assert _ordre(doc) == [1, 3, 4, 5, 0, 2]
+
+
+def test_place_pages_on_itself_changes_nothing():
+    doc = _doc_numerote(4)
+    assert core.place_pages(doc, [1, 2], 2) == []
+    assert core.place_pages(doc, [1, 2], 3) == []
+    assert _ordre(doc) == [0, 1, 2, 3]

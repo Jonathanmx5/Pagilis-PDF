@@ -11,6 +11,12 @@ Numérotation : MAJEUR.MINEUR.CORRECTIF.
 Une bêta (tag `v1.2.0-beta.1`) reprend les notes de sa version (`1.2.0`) si
 elle n'a pas de section propre.
 
+## [1.10.0]
+
+- Modifier : ajoutez du texte n'importe où sur la page (date, mention, champ de formulaire), en noir ou en bleu, en 4 tailles. Ctrl+Z l'annule.
+- Pages : faites glisser les vignettes pour changer l'ordre des pages. Une barre bleue montre où elles iront.
+- Recherche : une espace insécable est traitée comme une espace ordinaire. Une recherche de plusieurs mots trouve maintenant les lignes corrigées, et le texte des PDF qui mettent une espace insécable avant « : ».
+
 ## [1.9.0]
 
 - Signature tracée : le trait imite un stylo plume, avec des pleins épais, des déliés fins, des bords lisses et un tracé adouci.

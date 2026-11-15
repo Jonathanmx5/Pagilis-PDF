@@ -393,15 +393,17 @@ def _find_matches(page: fitz.Page, needle: str, match_case: bool) -> list[fitz.R
     """
     if not needle:
         return []
-    cible = needle if match_case else needle.lower()
+    # Espace insécable = espace : les PDF français en mettent avant « : », et une
+    # ligne écrite avec Arial relit ses espaces comme insécables.
+    cible = (needle if match_case else needle.lower()).replace(" ", " ")
     # Tri rapide : la lecture caractère par caractère (rawdict) coûte cher, on ne
     # la fait que sur les pages dont le texte contient le mot.
-    texte_page = page.get_text("text")
+    texte_page = page.get_text("text").replace(" ", " ")
     if cible not in (texte_page if match_case else texte_page.lower()):
         return []
     rects: list[fitz.Rect] = []
     for _line, chars in iter_lines(page):
-        texte = "".join(c["c"] for c in chars)
+        texte = "".join(c["c"] for c in chars).replace(" ", " ")
         comparé = texte if match_case else texte.lower()
         debut = 0
         while True:
@@ -684,6 +686,26 @@ def _write_span(page: fitz.Page, span: TextSpan, origin: fitz.Point, shrink: flo
     page.insert_text(fitz.Point(origin), span.text, **kwargs)
 
 
+def add_text(doc: fitz.Document, index: int, point: fitz.Point, texte: str, taille: float,
+             couleur: tuple[float, float, float]) -> bool:
+    """Écrit `texte` sur la page, à partir de `point` (repère affiché, milieu de la hauteur).
+
+    Arial s'il est installé (accents, €, tirets), sinon la police PDF standard.
+    Le texte apparaît droit même sur une page tournée. Faux si le texte est vide.
+    """
+    texte = texte.strip()
+    if not texte:
+        return False
+    page = doc[index]
+    fichier, standard = POLICES["sans"][(False, False)]
+    chemin = os.path.join(DOSSIER_POLICES, fichier + ".ttf")
+    police = dict(fontname=f"ps-{fichier}", fontfile=chemin) if os.path.exists(chemin) else dict(fontname=standard)
+    # Ligne de base un peu sous le clic : le clic tombe au milieu des lettres.
+    origine = fitz.Point(point.x, point.y + taille * 0.35) * page.derotation_matrix
+    page.insert_text(origine, texte, fontsize=taille, color=couleur, rotate=page.rotation, **police)
+    return True
+
+
 def _rgb(color: int) -> tuple[float, float, float]:
     return (((color >> 16) & 255) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255)
 
@@ -894,6 +916,24 @@ def move_pages(doc: fitz.Document, pages: Iterable[int], sens: int) -> list[int]
         ordre[i], ordre[i + sens] = ordre[i + sens], ordre[i]
     doc.select(ordre)
     return [i + sens for i in selection]
+
+
+def place_pages(doc: fitz.Document, pages: Iterable[int], cible: int) -> list[int]:
+    """Déplace les pages sélectionnées à la place `cible` (0 = avant la première page,
+    page_count = à la fin), comptée dans l'ordre actuel. Elles se suivent ensuite,
+    dans leur ordre. Retourne leurs nouveaux indices ; liste vide si rien ne bouge.
+    """
+    selection = sorted(set(pages))
+    n = doc.page_count
+    if not selection:
+        return []
+    reste = [i for i in range(n) if i not in selection]
+    k = sum(1 for i in reste if i < cible)
+    ordre = reste[:k] + selection + reste[k:]
+    if ordre == list(range(n)):
+        return []
+    doc.select(ordre)
+    return list(range(k, k + len(selection)))
 
 
 def insert_pdf(doc: fitz.Document, chemin: str, apres: Optional[int] = None) -> list[int]:

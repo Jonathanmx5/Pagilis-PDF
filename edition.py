@@ -82,6 +82,11 @@ class Edition:
         """Déplace les lignes de `rect` (repère affiché). Retourne le nombre de segments."""
         return self._retoucher(lambda: core.move_text_block(self.doc, page, rect, dx, dy))
 
+    def ajouter(self, page: int, point: fitz.Point, texte: str, taille: float,
+                couleur: tuple[float, float, float]) -> bool:
+        """Ajoute du texte à partir de `point` (repère affiché). Faux si le texte est vide."""
+        return self._retoucher(lambda: core.add_text(self.doc, page, point, texte, taille, couleur))
+
     def remplacer(self, ancien: str, nouveau: str, casse: bool = False, progress=None) -> int:
         """Remplace partout `ancien` par `nouveau` ; retourne le nombre de remplacements.
 
@@ -102,6 +107,10 @@ class Edition:
     def deplacer_pages(self, pages: list[int], sens: int) -> list[int]:
         """Avance (-1) ou recule (1) les pages d'un cran ; retourne leurs nouveaux indices."""
         return self._retoucher(lambda: core.move_pages(self.doc, pages, sens))
+
+    def placer_pages(self, pages: list[int], cible: int) -> list[int]:
+        """Déplace les pages à la place `cible` (glisser des vignettes) ; retourne leurs nouveaux indices."""
+        return self._retoucher(lambda: core.place_pages(self.doc, pages, cible))
 
     def inserer(self, chemin: str, apres: int | None = None) -> list[int]:
         """Insère un PDF après la page `apres` (à la fin si None) ; retourne les pages insérées."""

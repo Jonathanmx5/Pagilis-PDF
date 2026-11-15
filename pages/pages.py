@@ -51,7 +51,8 @@ class PageGestionPages(PageCopie):
         self._images: list[ImageTk.PhotoImage] = []
         self._a_redessiner = True
         self.section("Pages sélectionnées")
-        self.aide("Clic : une page. Ctrl+clic : en ajouter. Maj+clic : une suite de pages.")
+        self.aide("Clic : une page. Ctrl+clic : en ajouter. Maj+clic : une suite de pages. "
+                  "Glissez les vignettes pour changer l'ordre.")
         ligne = self.ligne()
         for icone_nom, miroir, commande, bulle in (
                 ("pivoter", True, lambda: self.tourner(-90), "Pivoter à gauche"),
@@ -71,7 +72,10 @@ class PageGestionPages(PageCopie):
         self.toile = tk.Canvas(self.cadre, bg=theme.SURFACE, highlightthickness=0, bd=0,
                                width=round(2 * CELLULE[0] * self.echelle), height=10)
         self.toile.pack(padx=10, pady=(0, 12), anchor="w")
-        self.toile.bind("<Button-1>", self._clic_toile)
+        self.toile.bind("<ButtonPress-1>", lambda e: self._appui_toile(e.x, self.toile.canvasy(e.y), e.state))
+        self.toile.bind("<B1-Motion>", lambda e: self._glisse_toile(e.x, self.toile.canvasy(e.y)))
+        self.toile.bind("<ButtonRelease-1>", lambda e: self._relache_toile(e.x, self.toile.canvasy(e.y)))
+        self._geste = None  # (x, y, page sous la souris, clic différé, glisser en cours)
         self._a_actualiser: list[int] | None = None  # pages à redessiner seules, sinon tout
 
     # ------------------------------------------------------- vignettes
@@ -149,13 +153,75 @@ class PageGestionPages(PageCopie):
         for i, fond in enumerate(self.vignettes):
             self.toile.itemconfigure(fond, fill=COULEUR_CHOISIE if i in self.selection else theme.SURFACE)
 
-    def _clic_toile(self, evenement):
-        """Clic sur la surface des vignettes : quelle page ? (état 0x4 = Ctrl, 0x1 = Maj)."""
-        colonne = int(evenement.x // (CELLULE[0] * self.echelle))
-        rang = int(self.toile.canvasy(evenement.y) // (CELLULE[1] * self.echelle))
-        i = rang * 2 + colonne
-        if colonne in (0, 1) and 0 <= i < len(self.vignettes):
-            self.cliquer(i, ctrl=bool(evenement.state & 0x4), maj=bool(evenement.state & 0x1))
+    def _case(self, x: float, y: float) -> int | None:
+        """Page sous le point (coordonnées de la surface), ou None."""
+        colonne = int(x // (CELLULE[0] * self.echelle))
+        i = int(y // (CELLULE[1] * self.echelle)) * 2 + colonne
+        return i if colonne in (0, 1) and 0 <= i < len(self.vignettes) else None
+
+    def _centre(self, i: int) -> tuple[float, float]:
+        x0, y0, x1, y1 = self._position(i)
+        return (x0 + x1) / 2, (y0 + y1) / 2
+
+    def _place(self, x: float, y: float) -> int:
+        """Place d'insertion sous le point : avant la page si on est sur sa moitié gauche."""
+        n = len(self.vignettes)
+        largeur = CELLULE[0] * self.echelle
+        colonne = min(1, max(0, int(x // largeur)))
+        i = max(0, int(y // (CELLULE[1] * self.echelle))) * 2 + colonne
+        if i >= n:
+            return n
+        return i if x - colonne * largeur < largeur / 2 else i + 1
+
+    def _appui_toile(self, x: float, y: float, etat: int):
+        """Appui sur les vignettes (état 0x4 = Ctrl, 0x1 = Maj) : sélection, ou début d'un glisser."""
+        i = self._case(x, y)
+        self._geste = None
+        if i is None:
+            return
+        ctrl, maj = bool(etat & 0x4), bool(etat & 0x1)
+        if ctrl or maj or i not in self.selection:
+            self.cliquer(i, ctrl=ctrl, maj=maj)
+            self._geste = (x, y, i, False, False)
+        else:
+            # Page déjà choisie : un clic la choisit seule, un glisser déplace tout le groupe.
+            self._geste = (x, y, i, True, False)
+
+    def _glisse_toile(self, x: float, y: float):
+        if not self._geste or self.edition is None or self._geste[2] not in self.selection:
+            return
+        x0, y0, i, differe, glisse = self._geste
+        if not glisse and abs(x - x0) + abs(y - y0) < 8 * self.echelle:
+            return
+        self._geste = (x0, y0, i, differe, True)
+        self.toile.delete("insertion")
+        place = self._place(x, y)
+        n = len(self.vignettes)
+        ax0, ay0, ax1, ay1 = self._position(min(place, n - 1))
+        trait_x = ax1 if place == n else ax0
+        self.toile.create_line(trait_x, ay0 + 6, trait_x, ay1 - 6, fill=theme.ACCENT,
+                               width=round(4 * self.echelle), tags="insertion")
+        self.toile.configure(cursor="fleur")
+
+    def _relache_toile(self, x: float, y: float):
+        geste, self._geste = self._geste, None
+        self.toile.delete("insertion")
+        self.toile.configure(cursor="")
+        if not geste:
+            return
+        _x0, _y0, i, differe, glisse = geste
+        if not glisse:
+            if differe:
+                self.cliquer(i)
+            return
+        pages, place = sorted(self.selection), self._place(x, y)
+        nouvelles = self.retoucher(lambda: self.edition.placer_pages(pages, place))
+        if nouvelles:
+            self.selection = set(nouvelles)
+            self._ancre = None
+            self._marquer_selection()
+            self.apercu.aller(nouvelles[0])
+            self.app.statut(f"{len(pages)} page(s) déplacée(s). Ctrl+Z pour annuler.")
 
     def cliquer(self, index: int, ctrl: bool = False, maj: bool = False):
         """Sélection à la souris : simple, ajout (Ctrl) ou suite (Maj)."""

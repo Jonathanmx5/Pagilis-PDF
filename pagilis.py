@@ -383,6 +383,17 @@ class Pagilis(ctk.CTk):
         self.statut("Conversion du document Word…")
         self.lancer(lambda _p: conversion.word_vers_pdf(chemin, dossier), fin=fin)
 
+    def deposer(self, chemins: list[str]):
+        """Fichiers déposés sur la fenêtre : la page affichée s'en sert, sinon le premier s'ouvre."""
+        self.lift()
+        if self.fonctions[self.page_active].fichiers_deposes(chemins):
+            return
+        ouvrables = fichiers_a_ouvrir(chemins)
+        if not ouvrables:
+            return self.statut("Seuls les PDF et les documents Word s'ouvrent ici.")
+        self.memoriser_dossier(ouvrables[0])
+        self.ouvrir_document(ouvrables[0])
+
     def demander_mot_de_passe(self, chemin: str) -> bool:
         """Demande le mot de passe d'un PDF chiffré et le mémorise. Faux si annulé."""
         mot_de_passe = simpledialog.askstring(
