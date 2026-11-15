@@ -1,0 +1,537 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+package fr.pagilis.pdf
+
+import android.app.AlertDialog
+import android.content.ClipData
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.DashPathEffect
+import android.graphics.Paint
+import android.graphics.RectF
+import android.net.Uri
+import android.provider.DocumentsContract
+import android.text.InputType
+import android.view.DragEvent
+import android.view.Gravity
+import android.view.View
+import android.widget.CheckBox
+import android.widget.EditText
+import android.widget.GridLayout
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.SeekBar
+import android.widget.TextView
+import com.artifex.mupdf.fitz.Matrix
+import com.artifex.mupdf.fitz.android.AndroidDrawDevice
+import fr.pagilis.pdf.Theme.dp
+import java.io.File
+import kotlin.math.max
+
+enum class Outil(val libelle: String, val symbole: String, val titre: String, val description: String,
+                 val exigeDocument: Boolean) {
+    LIRE("Lire", "📖", "Lire", "Faites glisser pour changer de page, pincez pour zoomer, touchez deux fois pour agrandir.", false),
+    SIGNER("Signer", "✒️", "Signer", "Posez votre signature (ou un tampon) sur la page.", true),
+    TEXTE("Texte", "Aa", "Ajouter du texte", "Une date, une mention, un champ de formulaire : touchez la page à l'endroit voulu.", true),
+    PAGES("Pages", "▦", "Pages", "Touchez les vignettes pour les choisir. Restez appuyé puis glissez pour changer l'ordre.", true),
+    FUSION("Fusionner", "⊕", "Fusionner", "Assembler plusieurs PDF dans l'ordre choisi.", false),
+    DECOUPE("Découper", "✂️", "Découper", "Séparer le PDF ouvert en plusieurs fichiers.", true);
+
+    fun creer(a: MainActivity): OutilPanneau = when (this) {
+        LIRE -> OutilLire(a)
+        SIGNER -> OutilSigner(a)
+        TEXTE -> OutilTexte(a)
+        PAGES -> OutilPages(a)
+        FUSION -> OutilFusion(a)
+        DECOUPE -> OutilDecoupe(a)
+    }
+}
+
+/** Un outil : son panneau, son action sur la page, ses réactions aux changements. */
+abstract class OutilPanneau(val a: MainActivity) {
+    abstract fun construire(p: LinearLayout)
+    open fun interaction(): Interaction? = null
+    open fun montre() {}
+    open fun quitter() {}
+    open fun pageChangee() {}
+    open fun documentChange() {}
+    open fun documentCharge() {}
+    open fun resultat(code: Int, uris: List<Uri>) {}
+
+    protected fun section(p: LinearLayout, titre: String) =
+        p.addView(Theme.titre(a, titre, 15f).apply { setPadding(0, a.dp(18), 0, a.dp(8)) })
+
+    protected fun ligne(p: LinearLayout, libelle: String, vue: View) {
+        val l = LinearLayout(a).apply { gravity = Gravity.CENTER_VERTICAL }
+        l.addView(Theme.texte(a, libelle, Theme.TEXTE_2), LinearLayout.LayoutParams(a.dp(92), -2))
+        l.addView(vue, LinearLayout.LayoutParams(0, -2, 1f))
+        p.addView(l, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = a.dp(10) })
+    }
+
+    protected fun action(p: LinearLayout, texte: String, style: Theme.Style = Theme.Style.PRINCIPAL, f: () -> Unit) =
+        Theme.bouton(a, texte, style, f).also { p.addView(it, LinearLayout.LayoutParams(-1, a.dp(50)).apply { topMargin = a.dp(10) }) }
+
+    protected fun curseur(p: LinearLayout, libelle: String, min: Int, max: Int, valeur: Int, suffixe: String,
+                          change: (Int) -> Unit): SeekBar {
+        val affichage = Theme.texte(a, "$valeur$suffixe", Theme.TEXTE).apply { minWidth = a.dp(56); gravity = Gravity.END }
+        val barre = SeekBar(a).apply {
+            this.max = max - min
+            progress = valeur - min
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar, v: Int, u: Boolean) { affichage.text = "${v + min}$suffixe"; change(v + min) }
+                override fun onStartTrackingTouch(s: SeekBar) {}
+                override fun onStopTrackingTouch(s: SeekBar) {}
+            })
+        }
+        val l = LinearLayout(a).apply { gravity = Gravity.CENTER_VERTICAL }
+        l.addView(Theme.texte(a, libelle, Theme.TEXTE_2), LinearLayout.LayoutParams(a.dp(92), -2))
+        l.addView(barre, LinearLayout.LayoutParams(0, -2, 1f))
+        l.addView(affichage)
+        p.addView(l, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = a.dp(6) })
+        return barre
+    }
+}
+
+class OutilLire(a: MainActivity) : OutilPanneau(a) {
+    override fun construire(p: LinearLayout) {
+        if (a.copie == null) action(p, "Ouvrir un PDF") { a.choisirFichier() }
+    }
+}
+
+// ----------------------------------------------------------------- Signer
+
+class OutilSigner(a: MainActivity) : OutilPanneau(a), Interaction {
+    private var image: File? = Signature.enregistree(a)
+    private var ratio = image?.let { Signature.ratio(it) } ?: 0.4f
+    private var libelle = if (image != null) "Ma signature" else null
+    private var largeur = 160f            // points PDF
+    private var opacite = 100
+    private var centre: FloatArray? = null // centre de l'image sur la page (repère affiché)
+    private var prise: FloatArray? = null  // décalage du doigt dans l'image pendant un glisser
+    private var apercu: Bitmap? = null
+
+    override fun construire(p: LinearLayout) {
+        section(p, "Image")
+        val l = LinearLayout(a)
+        l.addView(Theme.bouton(a, if (image != null && libelle == "Ma signature") "Refaire ma signature" else "Créer ma signature",
+            Theme.Style.SECONDAIRE) {
+            Signature.creer(a) { f -> utiliser(f, "Ma signature") }
+        }, LinearLayout.LayoutParams(0, a.dp(48), 1f))
+        l.addView(Theme.bouton(a, "Image…", Theme.Style.SECONDAIRE) { a.choisirImage() },
+            LinearLayout.LayoutParams(-2, a.dp(48)).apply { marginStart = a.dp(8) })
+        p.addView(l)
+        p.addView(Theme.texte(a, libelle ?: "Créez votre signature, ou choisissez une image (signature scannée, tampon…).",
+            if (libelle != null) Theme.TEXTE else Theme.TEXTE_2).apply { setPadding(0, a.dp(8), 0, 0) })
+        section(p, "Placement")
+        p.addView(Theme.texte(a, "Touchez la page pour poser l'image, puis faites-la glisser.").apply { setPadding(0, 0, 0, a.dp(8)) })
+        curseur(p, "Taille", 40, 400, largeur.toInt(), "") { largeur = it.toFloat(); a.vue.invalidate() }
+        curseur(p, "Opacité", 10, 100, opacite, " %") { opacite = it; a.vue.invalidate() }
+        action(p, "Poser la signature") { poser() }
+    }
+
+    private fun utiliser(f: File, nom: String) {
+        image = f
+        ratio = Signature.ratio(f)
+        libelle = nom
+        apercu = null
+        a.rafraichirPanneau()
+    }
+
+    override fun resultat(code: Int, uris: List<Uri>) {
+        if (code != MainActivity.CHOISIR_IMAGE) return
+        val f = File(a.filesDir, "tampon_image")
+        a.contentResolver.openInputStream(uris[0])?.use { e -> f.outputStream().use { e.copyTo(it) } }
+        if (BitmapFactory.decodeFile(f.path) == null) return a.erreur(ErreurPdf("Image illisible."))
+        utiliser(f, a.nomDe(uris[0]))
+    }
+
+    override fun interaction() = this
+    override fun pageChangee() { centre = null }
+
+    private fun rect(): RectF? {
+        val c = centre ?: return null
+        val h = largeur * ratio
+        return RectF(c[0] - largeur / 2, c[1] - h / 2, c[0] + largeur / 2, c[1] + h / 2)
+    }
+
+    override fun appui(x: Float, y: Float) {
+        if (image == null) { a.statut("Créez d'abord votre signature, ou choisissez une image."); return }
+        val r = rect()
+        if (r != null && r.contains(x, y)) prise = floatArrayOf(x - r.centerX(), y - r.centerY())
+        else { centre = floatArrayOf(x, y); prise = floatArrayOf(0f, 0f) }
+    }
+
+    override fun glisse(x: Float, y: Float) {
+        val d = prise ?: return
+        centre = floatArrayOf(x - d[0], y - d[1])
+    }
+
+    override fun relache(x: Float, y: Float) { prise = null }
+
+    override fun dessiner(canvas: Canvas, vue: VuePage) {
+        val r = rect() ?: return
+        val f = image ?: return
+        if (apercu == null) apercu = Signature.apercu(f)
+        val zone = vue.rectEcran(r.left, r.top, r.right, r.bottom)
+        canvas.drawBitmap(apercu!!, null, zone, Paint(Paint.FILTER_BITMAP_FLAG).apply { alpha = opacite * 255 / 100 })
+        canvas.drawRect(zone, Paint().apply {
+            style = Paint.Style.STROKE; color = Theme.ACCENT; strokeWidth = a.dp(2f)
+            pathEffect = DashPathEffect(floatArrayOf(a.dp(6f), a.dp(4f)), 0f)
+        })
+    }
+
+    private fun poser() {
+        val f = image ?: return a.statut("Créez d'abord votre signature, ou choisissez une image.")
+        val r = rect() ?: return a.statut("Touchez d'abord la page à l'endroit de la signature.")
+        val i = a.vue.index
+        a.retoucher("Signature…", { it.poserImage(i, com.artifex.mupdf.fitz.Rect(r.left, r.top, r.right, r.bottom), f.path, opacite / 100f) }) {
+            centre = null
+            a.statut("Signature posée. Annuler pour revenir en arrière, Enregistrer pour garder.")
+        }
+    }
+}
+
+// ----------------------------------------------------------------- Texte
+
+class OutilTexte(a: MainActivity) : OutilPanneau(a), Interaction {
+    private val couleurs = linkedMapOf("Noir" to floatArrayOf(0f, 0f, 0f), "Bleu" to floatArrayOf(0.08f, 0.2f, 0.55f))
+    private var taille = "12"
+    private var couleur = "Noir"
+    private var marque: FloatArray? = null
+
+    override fun construire(p: LinearLayout) {
+        section(p, "Style")
+        ligne(p, "Taille", Theme.Segments(a, listOf("10", "12", "14", "18"), taille) { taille = it })
+        ligne(p, "Couleur", Theme.Segments(a, couleurs.keys.toList(), couleur) { couleur = it })
+        p.addView(Theme.texte(a, "Touchez la page à l'endroit du texte, tapez, puis Ajouter.").apply { setPadding(0, a.dp(8), 0, 0) })
+    }
+
+    override fun interaction() = this
+    override fun appui(x: Float, y: Float) { marque = floatArrayOf(x, y) }
+    override fun dessiner(canvas: Canvas, vue: VuePage) {
+        val m = marque ?: return
+        val e = vue.versEcran(m[0], m[1])
+        canvas.drawLine(e[0], e[1] - a.dp(14f), e[0], e[1] + a.dp(14f), Paint().apply { color = Theme.ACCENT; strokeWidth = a.dp(2f) })
+    }
+
+    override fun relache(x: Float, y: Float) {
+        val i = a.vue.index
+        val champ = EditText(a).apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES; hint = "Texte à ajouter" }
+        val d = AlertDialog.Builder(a).setTitle("Ajouter du texte").setView(champ)
+            .setPositiveButton("Ajouter") { _, _ ->
+                val t = champ.text.toString()
+                val taillePt = taille.toFloat()
+                val rvb = couleurs.getValue(couleur)
+                a.retoucher("Ajout du texte…", { it.ajouterTexte(i, x, y, t, taillePt, rvb) }) { ajoute ->
+                    marque = null
+                    a.statut(if (ajoute) "Texte ajouté. Touchez ailleurs pour en ajouter." else "Texte vide : rien n'a été ajouté.")
+                }
+            }
+            .setNegativeButton("Annuler") { _, _ -> marque = null; a.vue.invalidate() }
+            .create()
+        d.setOnShowListener { champ.requestFocus() }
+        d.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+        d.show()
+    }
+}
+
+// ----------------------------------------------------------------- Pages
+
+class OutilPages(a: MainActivity) : OutilPanneau(a) {
+    private val selection = sortedSetOf<Int>()
+    private var grille: GridLayout? = null
+    private val vignettes = mutableMapOf<Int, Bitmap>()
+
+    override fun construire(p: LinearLayout) {
+        val actions = LinearLayout(a)
+        fun b(t: String, style: Theme.Style = Theme.Style.SECONDAIRE, f: () -> Unit) =
+            actions.addView(Theme.bouton(a, t, style, f).apply { textSize = 18f }, LinearLayout.LayoutParams(0, a.dp(48), 1f).apply { marginEnd = a.dp(6) })
+        b("⟲") { pivoter(-90) }
+        b("⟳") { pivoter(90) }
+        b("🗑", Theme.Style.DANGER) { supprimer() }
+        p.addView(actions)
+        val l2 = LinearLayout(a)
+        l2.addView(Theme.bouton(a, "Insérer un PDF…") { a.choisirFichier(MainActivity.INSERER_PDF) }, LinearLayout.LayoutParams(0, a.dp(48), 1f).apply { marginEnd = a.dp(6) })
+        l2.addView(Theme.bouton(a, "Extraire…") { extraire() }, LinearLayout.LayoutParams(0, a.dp(48), 1f))
+        p.addView(l2, LinearLayout.LayoutParams(-1, -2).apply { topMargin = a.dp(6) })
+        section(p, "Toutes les pages")
+        val g = GridLayout(a).apply { columnCount = 2 }
+        grille = g
+        p.addView(g)
+        remplir()
+    }
+
+    override fun documentCharge() { selection.clear(); vignettes.clear() }
+    override fun documentChange() { vignettes.clear(); if (a.outilActif == Outil.PAGES) remplir() }
+
+    private fun remplir() {
+        val g = grille ?: return
+        val c = a.copie ?: return
+        g.removeAllViews()
+        selection.retainAll((0 until c.nombrePages).toSet())
+        val largeur = a.dp(140)
+        for (i in 0 until c.nombrePages) {
+            val cellule = LinearLayout(a).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(a.dp(6), a.dp(6), a.dp(6), a.dp(4))
+                tag = i
+            }
+            val img = ImageView(a).apply { scaleType = ImageView.ScaleType.FIT_CENTER; setBackgroundColor(Theme.DOCUMENT) }
+            cellule.addView(img, LinearLayout.LayoutParams(largeur, (largeur * 1.3f).toInt()))
+            cellule.addView(Theme.texte(a, "${i + 1}", Theme.TEXTE_2, 12f).apply { gravity = Gravity.CENTER })
+            marquer(cellule, i)
+            cellule.setOnClickListener {
+                if (!selection.remove(i)) selection.add(i)
+                marquer(cellule, i)
+                a.vue.aller(i)
+            }
+            cellule.setOnLongClickListener { v ->
+                if (i !in selection) { selection.add(i); marquer(cellule, i) }
+                v.startDragAndDrop(ClipData.newPlainText("pages", selection.joinToString(",")), View.DragShadowBuilder(v), null, 0)
+                true
+            }
+            cellule.setOnDragListener { v, e -> deposer(v, e, i) }
+            g.addView(cellule)
+            val dejaLa = vignettes[i]
+            if (dejaLa != null) img.setImageBitmap(dejaLa)
+            else Moteur.lancer({
+                val page = c.doc.loadPage(i)
+                val b = page.bounds
+                AndroidDrawDevice.drawPage(page, Matrix(largeur / max(b.x1 - b.x0, b.y1 - b.y0)))
+            }) { bmp -> vignettes[i] = bmp; img.setImageBitmap(bmp) }
+        }
+    }
+
+    private fun marquerTout() {
+        val g = grille ?: return
+        for (k in 0 until g.childCount) marquer(g.getChildAt(k), k)
+    }
+
+    private fun marquer(cellule: View, i: Int) {
+        cellule.background = if (i in selection) Theme.fond(Theme.ACCENT_DOUX, a.dp(8f), Theme.ACCENT, a.dp(2)) else null
+    }
+
+    /** Dépôt d'une vignette glissée : avant la page si on lâche sur sa moitié gauche. */
+    private fun deposer(v: View, e: DragEvent, i: Int): Boolean {
+        when (e.action) {
+            DragEvent.ACTION_DRAG_STARTED -> return true
+            DragEvent.ACTION_DRAG_LOCATION, DragEvent.ACTION_DRAG_ENTERED -> {
+                v.foreground = BarreInsertion(e.x < v.width / 2, a.dp(4f))
+            }
+            DragEvent.ACTION_DRAG_EXITED, DragEvent.ACTION_DRAG_ENDED -> v.foreground = null
+            DragEvent.ACTION_DROP -> {
+                v.foreground = null
+                val place = if (e.x < v.width / 2) i else i + 1
+                val pages = selection.toList()
+                a.retoucher("Déplacement des pages…", { it.placer(pages, place) }) { nouvelles ->
+                    if (nouvelles.isNotEmpty()) {
+                        selection.clear(); selection.addAll(nouvelles)
+                        marquerTout()
+                        a.vue.aller(nouvelles[0])
+                        a.statut("${pages.size} page(s) déplacée(s).")
+                    }
+                }
+            }
+        }
+        return true
+    }
+
+    private fun choisies(): List<Int>? {
+        if (selection.isEmpty()) { a.statut("Touchez d'abord une ou plusieurs vignettes."); return null }
+        return selection.toList()
+    }
+
+    private fun pivoter(angle: Int) {
+        val p = choisies() ?: return
+        a.retoucher("Rotation…", { it.pivoter(p, angle) }) { a.statut("${p.size} page(s) pivotée(s).") }
+    }
+
+    private fun supprimer() {
+        val p = choisies() ?: return
+        AlertDialog.Builder(a).setTitle("Supprimer ${p.size} page(s) ?").setMessage("Annuler permet de revenir en arrière.")
+            .setPositiveButton("Supprimer") { _, _ ->
+                a.retoucher("Suppression…", { it.supprimer(p) }) {
+                    selection.clear()
+                    marquerTout()
+                    a.statut("${p.size} page(s) supprimée(s).")
+                }
+            }.setNegativeButton("Annuler", null).show()
+    }
+
+    private fun extraire() {
+        val p = choisies() ?: return
+        val c = a.copie ?: return
+        a.travailler("Extraction…", { c.extraire(p) }) { octets ->
+            a.ecrireNouveau(octets, a.nom.removeSuffix(".pdf") + "_pages_" + plages(p) + ".pdf") {
+                a.statut("${p.size} page(s) extraite(s).")
+            }
+        }
+    }
+
+    override fun resultat(code: Int, uris: List<Uri>) {
+        if (code != MainActivity.INSERER_PDF) return
+        val apres = selection.lastOrNull() ?: ((a.copie?.nombrePages ?: 1) - 1)
+        a.retoucher("Insertion…", { it.inserer(a.lire(uris[0]), apres) }) { nouvelles ->
+            selection.clear(); selection.addAll(nouvelles)
+            marquerTout()
+            a.statut("${nouvelles.size} page(s) insérée(s).")
+        }
+    }
+
+    companion object {
+        /** [0,1,2,4] -> « 1-3,5 » */
+        fun plages(p: List<Int>): String {
+            val morceaux = mutableListOf<String>()
+            var debut = p[0]; var prec = p[0]
+            for (i in p.drop(1) + listOf(-2)) {
+                if (i == prec + 1) { prec = i; continue }
+                morceaux += if (debut == prec) "${debut + 1}" else "${debut + 1}-${prec + 1}"
+                debut = i; prec = i
+            }
+            return morceaux.joinToString(",")
+        }
+    }
+}
+
+/** Barre bleue au bord d'une vignette : là où les pages iront. */
+class BarreInsertion(private val gauche: Boolean, private val epaisseur: Float) : android.graphics.drawable.Drawable() {
+    private val p = Paint().apply { color = Theme.ACCENT }
+    override fun draw(c: Canvas) {
+        val b = bounds
+        val x = if (gauche) b.left.toFloat() else b.right - epaisseur
+        c.drawRect(x, b.top.toFloat(), x + epaisseur, b.bottom.toFloat(), p)
+    }
+    override fun setAlpha(alpha: Int) {}
+    override fun setColorFilter(cf: android.graphics.ColorFilter?) {}
+    @Deprecated("Drawable") override fun getOpacity() = android.graphics.PixelFormat.TRANSLUCENT
+}
+
+// ----------------------------------------------------------------- Fusionner
+
+class OutilFusion(a: MainActivity) : OutilPanneau(a) {
+    private val fichiers = mutableListOf<Pair<Uri, String>>()
+    private var choisi: Int? = null
+    private var inclureOuvert = true
+
+    override fun construire(p: LinearLayout) {
+        if (a.copie != null) {
+            p.addView(CheckBox(a).apply {
+                text = "Commencer par le document ouvert (${a.nom})"; setTextColor(Theme.TEXTE); isChecked = inclureOuvert
+                setOnCheckedChangeListener { _, v -> inclureOuvert = v }
+            })
+        }
+        section(p, "Fichiers à assembler")
+        val liste = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; background = Theme.fond(Theme.SURFACE_2, a.dp(8f)); setPadding(a.dp(4), a.dp(4), a.dp(4), a.dp(4)) }
+        if (fichiers.isEmpty()) liste.addView(Theme.texte(a, "Aucun fichier pour l'instant.", Theme.TEXTE_DISCRET).apply { setPadding(a.dp(12), a.dp(16), a.dp(12), a.dp(16)) })
+        fichiers.forEachIndexed { i, (_, n) ->
+            liste.addView(TextView(a).apply {
+                text = "${i + 1}.  $n"; textSize = 15f; setTextColor(Theme.TEXTE); maxLines = 1
+                setPadding(a.dp(12), a.dp(12), a.dp(12), a.dp(12))
+                background = if (i == choisi) Theme.fond(Theme.ACCENT_DOUX, a.dp(6f)) else null
+                setOnClickListener { choisi = i; a.rafraichirPanneau() }
+            })
+        }
+        p.addView(liste)
+        val l = LinearLayout(a).apply { setPadding(0, a.dp(8), 0, 0) }
+        fun b(t: String, f: () -> Unit) = l.addView(Theme.bouton(a, t, Theme.Style.SECONDAIRE, f), LinearLayout.LayoutParams(0, a.dp(48), 1f).apply { marginEnd = a.dp(6) })
+        b("Ajouter…") { a.choisirFichier(MainActivity.AJOUTER_PDF, plusieurs = true) }
+        b("▲") { deplacer(-1) }
+        b("▼") { deplacer(1) }
+        b("✕") { choisi?.let { fichiers.removeAt(it); choisi = null; a.rafraichirPanneau() } }
+        p.addView(l)
+        action(p, "Fusionner") { fusionner() }
+    }
+
+    private fun deplacer(sens: Int) {
+        val i = choisi ?: return
+        val j = i + sens
+        if (j !in fichiers.indices) return
+        fichiers[i] = fichiers[j].also { fichiers[j] = fichiers[i] }
+        choisi = j
+        a.rafraichirPanneau()
+    }
+
+    override fun resultat(code: Int, uris: List<Uri>) {
+        if (code != MainActivity.AJOUTER_PDF) return
+        fichiers += uris.map { it to a.nomDe(it) }
+        a.rafraichirPanneau()
+    }
+
+    private fun fusionner() {
+        val c = if (inclureOuvert) a.copie else null
+        val liste = fichiers.toList()
+        if ((if (c != null) 1 else 0) + liste.size < 2) return a.statut("Ajoutez au moins deux PDF à assembler.")
+        a.travailler("Fusion…", {
+            val docs = listOfNotNull(c?.let { CopiePdf.ouvrir(it.octets(), null) }) + liste.map { CopiePdf.ouvrir(a.lire(it.first), null) }
+            Assemblage.fusionner(docs)
+        }) { octets ->
+            a.ecrireNouveau(octets, "fusion.pdf") { uri ->
+                a.statut("Fusion enregistrée.")
+                AlertDialog.Builder(a).setMessage("Ouvrir le PDF fusionné ?")
+                    .setPositiveButton("Ouvrir") { _, _ -> a.confirmerAbandon { a.ouvrirUri(uri) } }
+                    .setNegativeButton("Plus tard", null).show()
+            }
+        }
+    }
+}
+
+// ----------------------------------------------------------------- Découper
+
+class OutilDecoupe(a: MainActivity) : OutilPanneau(a) {
+    private var mode = "Une page par fichier"
+    private var plages = ""
+
+    override fun construire(p: LinearLayout) {
+        val modes = listOf("Une page par fichier", "Selon des plages")
+        for (m in modes) {
+            p.addView(android.widget.RadioButton(a).apply {
+                text = m; setTextColor(Theme.TEXTE); isChecked = m == mode; textSize = 15f
+                setOnClickListener { mode = m; a.rafraichirPanneau() }
+            })
+        }
+        if (mode == "Selon des plages") {
+            p.addView(EditText(a).apply {
+                hint = "1-3, 5, 8-"; setText(plages); setTextColor(Theme.TEXTE); setHintTextColor(Theme.TEXTE_DISCRET)
+                inputType = InputType.TYPE_CLASS_TEXT
+                addTextChangedListener(object : android.text.TextWatcher {
+                    override fun afterTextChanged(s: android.text.Editable?) { plages = s.toString() }
+                    override fun beforeTextChanged(s: CharSequence?, a1: Int, b: Int, c: Int) {}
+                    override fun onTextChanged(s: CharSequence?, a1: Int, b: Int, c: Int) {}
+                })
+            })
+            p.addView(Theme.texte(a, "Chaque plage devient un fichier.", Theme.TEXTE_2, 13f))
+        }
+        p.addView(Theme.texte(a, "Vous choisirez ensuite le dossier où ranger les fichiers.").apply { setPadding(0, a.dp(12), 0, 0) })
+        action(p, "Découper") { decouper() }
+    }
+
+    private var morceaux: List<List<Int>> = emptyList()
+
+    private fun decouper() {
+        val c = a.copie ?: return
+        morceaux = try {
+            if (mode == "Une page par fichier") (0 until c.nombrePages).map { listOf(it) } else Assemblage.plages(plages, c.nombrePages)
+        } catch (e: ErreurPdf) { return a.erreur(e) }
+        a.startActivityForResult(android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT_TREE), MainActivity.DOSSIER)
+    }
+
+    override fun resultat(code: Int, uris: List<Uri>) {
+        if (code != MainActivity.DOSSIER) return
+        val c = a.copie ?: return
+        val arbre = uris[0]
+        val base = a.nom.removeSuffix(".pdf")
+        val liste = morceaux
+        a.travailler("Découpe…", {
+            val dossier = DocumentsContract.buildDocumentUriUsingTree(arbre, DocumentsContract.getTreeDocumentId(arbre))
+            for (pages in liste) {
+                val octets = c.extraire(pages)
+                val n = "${base}_${OutilPages.plages(pages)}.pdf"
+                val f = DocumentsContract.createDocument(a.contentResolver, dossier, "application/pdf", n)
+                    ?: throw ErreurPdf("Impossible de créer « $n » dans ce dossier.")
+                a.ecrire(f, octets)
+            }
+            liste.size
+        }) { n -> a.statut("$n fichier(s) créé(s).") }
+    }
+}

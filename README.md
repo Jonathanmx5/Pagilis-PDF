@@ -81,6 +81,25 @@ Applications installées*.
 > un avertissement au premier lancement : cliquez sur *Informations
 > complémentaires*, puis sur *Exécuter quand même*.
 
+## Sur tablette et téléphone Android
+
+Pagilis PDF existe aussi pour Android (tablette et téléphone, Android 8 ou plus récent).
+Il repose sur le même moteur PDF (MuPDF) et propose :
+
+- **Signer** : créez votre signature au doigt ou au stylet, avec un trait de stylo plume, puis posez-la à l'endroit voulu.
+- **Ajouter du texte** : une date, une mention ou un champ de formulaire, en noir ou en bleu.
+- **Pages** : pivoter, supprimer, insérer, extraire, ou réordonner en glissant les vignettes.
+- **Fusionner** et **Découper**.
+- **Enregistrer** (en remplaçant l'original ou en créant une copie) et **Partager** (mail, messagerie…).
+- **Ouvrir avec Pagilis PDF** depuis l'application Fichiers, Gmail, etc.
+
+Pour l'installer, téléchargez `PagilisPDF.apk` dans les versions `android-v…` des
+[Releases](https://github.com/Jonathanmx5/Pagilis-PDF/releases), puis ouvrez-le sur l'appareil.
+Android demandera d'autoriser l'installation depuis cette source.
+
+La version Android ne sait pas encore faire trois choses de la version PC : corriger une
+ligne de texte existante, ouvrir un document Word et reconnaître le texte d'un scan (OCR).
+
 ## Bon à savoir
 
 - **Polices.** Le texte corrigé reprend la police d'origine quand le PDF
@@ -152,6 +171,20 @@ Les versions des dépendances sont figées dans `requirements*.txt`.
 
 Un tag `-beta.N` publie une pré-version que l'application ne propose jamais
 d'elle-même.
+
+**Android** : le projet est dans `android/` (Kotlin et MuPDF, sans autre bibliothèque).
+
+```bat
+cd android
+gradlew testDebugUnitTest          :: calculs (sur le PC)
+gradlew connectedDebugAndroidTest  :: moteur PDF (sur un émulateur ou un appareil branché)
+gradlew assembleDebug
+```
+
+Un tag `android-vX.Y.Z` publie `PagilisPDF.apk`. Pour signer les versions publiées avec
+une clé stable, ajoutez les secrets `ANDROID_KEYSTORE_B64` et `ANDROID_KEYSTORE_PASSWORD`.
+Sans eux, l'APK est signé avec une clé de débogage, et une version suivante ne pourra pas
+s'installer par-dessus.
 
 **Sûreté des mises à jour** :
 

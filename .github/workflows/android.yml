@@ -1,0 +1,60 @@
+# Application Android : tests et APK à chaque changement du dossier android/,
+# publication de l'APK quand on pousse un tag android-vX.Y.Z.
+name: Android
+
+on:
+  push:
+    branches: [main]
+    paths: ["android/**", ".github/workflows/android.yml"]
+    tags: ["android-v*"]
+  pull_request:
+    paths: ["android/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Clé de signature (si elle est fournie en secret)
+        env:
+          CLE: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        if: env.CLE != ''
+        run: |
+          echo "$CLE" | base64 -d > pagilis-release.jks
+          {
+            echo "storeFile=$PWD/pagilis-release.jks"
+            echo "storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
+            echo "keyAlias=pagilis"
+            echo "keyPassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
+          } > key.properties
+      - name: Version depuis le tag
+        if: startsWith(github.ref, 'refs/tags/android-v')
+        run: echo "VERSION=${GITHUB_REF_NAME#android-v}" >> "$GITHUB_ENV"
+      - name: Tests et APK
+        run: ./gradlew testDebugUnitTest assembleRelease -PversionPagilis="${VERSION:-0.0.0}" --console=plain
+      - name: Renommer l'APK
+        run: cp app/build/outputs/apk/release/app-release.apk PagilisPDF.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PagilisPDF-apk
+          path: android/PagilisPDF.apk
+      - name: Publier
+        if: startsWith(github.ref, 'refs/tags/android-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" PagilisPDF.apk \
+            --title "Pagilis PDF Android $VERSION" --latest=false \
+            --notes "Application Android (tablette et téléphone). Installer PagilisPDF.apk sur l'appareil."
