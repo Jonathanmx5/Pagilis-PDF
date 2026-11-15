@@ -181,10 +181,19 @@ gradlew connectedDebugAndroidTest  :: moteur PDF (sur un émulateur ou un appare
 gradlew assembleDebug
 ```
 
-Un tag `android-vX.Y.Z` publie `PagilisPDF.apk`. Pour signer les versions publiées avec
-une clé stable, ajoutez les secrets `ANDROID_KEYSTORE_B64` et `ANDROID_KEYSTORE_PASSWORD`.
-Sans eux, l'APK est signé avec une clé de débogage, et une version suivante ne pourra pas
-s'installer par-dessus.
+Les versions publiées sont signées avec la clé `android/pagilis-release.jks` (décrite par
+`android/key.properties`), gardée sur le PC du mainteneur et jamais commitée. Sans elle,
+une nouvelle version ne peut pas s'installer par-dessus l'ancienne : sauvegardez ces deux
+fichiers. Pour publier, depuis `android/` :
+
+```bat
+gradlew assembleRelease -PversionPagilis=X.Y.Z
+gh release create android-vX.Y.Z app/build/outputs/apk/release/app-release.apk#PagilisPDF.apk --latest=false
+eleasepp-release.apk#PagilisPDF.apk --latest=false
+```
+
+Si les secrets `ANDROID_KEYSTORE_B64` et `ANDROID_KEYSTORE_PASSWORD` sont ajoutés au dépôt,
+pousser un tag `android-vX.Y.Z` suffit : la CI signe et publie.
 
 **Sûreté des mises à jour** :
 

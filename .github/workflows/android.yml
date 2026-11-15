@@ -50,10 +50,14 @@ jobs:
         with:
           name: PagilisPDF-apk
           path: android/PagilisPDF.apk
+      # Publication automatique seulement avec la clé stable (secrets) : un APK signé
+      # avec une clé de test ne pourrait pas être mis à jour. Sans les secrets, l'APK
+      # est signé et publié depuis le PC qui garde la clé (voir README).
       - name: Publier
-        if: startsWith(github.ref, 'refs/tags/android-v')
+        if: startsWith(github.ref, 'refs/tags/android-v') && env.CLE != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          CLE: ${{ secrets.ANDROID_KEYSTORE_B64 }}
         run: |
           gh release create "$GITHUB_REF_NAME" PagilisPDF.apk \
             --title "Pagilis PDF Android $VERSION" --latest=false \
