@@ -7,6 +7,7 @@ dans le dossier de données pour être reprise à l'ouverture suivante.
 
 from __future__ import annotations
 
+import math
 import os
 import tkinter as tk
 from typing import Callable
@@ -20,7 +21,13 @@ import theme
 NOM_FICHIER = "signature.png"
 ECHELLE = 3          # l'image est dessinée 3 fois plus fine que l'écran : nette à l'impression
 MARGE = 6            # marge autour du tracé, en pixels écran
-EPAISSEUR = 3        # épaisseur du trait, en pixels écran
+EPAISSEUR = 3        # épaisseur du trait, en pixels écran (aperçu de l'onglet Écrire)
+# Plume biseautée : un bec de LARGEUR_BEC pixels tenu à ANGLE_BEC degrés (vers le haut à
+# droite). Un trait dans le sens du bec est un délié, un trait en travers est un plein.
+LARGEUR_BEC = 7
+ANGLE_BEC = 40
+DELIE = 1            # épaisseur minimale d'un délié, en pixels écran
+AMINCI = 4           # nombre de points sur lesquels le trait s'affine en début et en fin
 ENCRES = {"Noire": (25, 25, 35), "Bleue": (20, 50, 140)}
 DOSSIER_POLICES = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
 # Polices manuscrites livrées avec Windows ou Office, de la plus lisible à la plus ornée.
@@ -48,23 +55,65 @@ def _rogner(image: Image.Image, marge: int) -> Image.Image | None:
                        min(image.width, x1 + marge), min(image.height, y1 + marge)))
 
 
-def image_trace(traits: list[list[tuple[float, float]]], encre: tuple[int, int, int],
-                epaisseur: int = EPAISSEUR) -> Image.Image | None:
-    """Image des traits tracés (coordonnées écran), ou None s'il n'y a rien."""
-    points = [p for trait in traits for p in trait]
-    if not points:
+def _lisser(trait: list[tuple[float, float]], passes: int = 2) -> list[tuple[float, float]]:
+    """Adoucit le tracé de la souris (coins coupés de Chaikin), extrémités conservées."""
+    for _ in range(passes):
+        if len(trait) < 3:
+            return trait
+        lisse = [trait[0]]
+        for (x0, y0), (x1, y1) in zip(trait, trait[1:]):
+            lisse += [(0.75 * x0 + 0.25 * x1, 0.75 * y0 + 0.25 * y1), (0.25 * x0 + 0.75 * x1, 0.25 * y0 + 0.75 * y1)]
+        trait = lisse + [trait[-1]]
+    return trait
+
+
+def polygones_plume(trait: list[tuple[float, float]], echelle: float = 1) -> list[list[tuple[float, float]]]:
+    """Formes laissées par la plume le long du trait (coordonnées multipliées par echelle).
+
+    Chaque segment est la surface balayée par le bec ; le bec s'affine aux deux bouts
+    du trait, comme une plume qu'on pose puis qu'on lève.
+    """
+    if not trait:
+        return []
+    angle = math.radians(ANGLE_BEC)
+    bec = (math.cos(angle) * LARGEUR_BEC / 2 * echelle, -math.sin(angle) * LARGEUR_BEC / 2 * echelle)
+    pts = [(x * echelle, y * echelle) for x, y in trait]
+    if len(pts) == 1:  # un simple clic : une goutte d'encre en forme de bec
+        (x, y), (bx, by) = pts[0], bec
+        return [[(x + bx, y + by), (x - by / 2, y + bx / 2), (x - bx, y - by), (x + by / 2, y - bx / 2)]]
+    n = len(pts)
+
+    def demi_bec(i):
+        f = min(1.0, 0.35 + 0.65 * min(i, n - 1 - i) / AMINCI)
+        return bec[0] * f, bec[1] * f
+    formes = []
+    for i in range(n - 1):
+        (x0, y0), (x1, y1) = pts[i], pts[i + 1]
+        (ax, ay), (bx, by) = demi_bec(i), demi_bec(i + 1)
+        formes.append([(x0 + ax, y0 + ay), (x1 + bx, y1 + by), (x1 - bx, y1 - by), (x0 - ax, y0 - ay)])
+    return formes
+
+
+def image_trace(traits: list[list[tuple[float, float]]], encre: tuple[int, int, int]) -> Image.Image | None:
+    """Image des traits tracés à la plume (coordonnées écran), ou None s'il n'y a rien."""
+    traits = [[(x + MARGE, y + MARGE) for x, y in t] for t in traits if t]
+    if not traits:
         return None
-    largeur = int(max(x for x, _y in points) + 2 * MARGE + epaisseur) * ECHELLE
-    hauteur = int(max(y for _x, y in points) + 2 * MARGE + epaisseur) * ECHELLE
-    image = Image.new("RGBA", (largeur, hauteur), (0, 0, 0, 0))
-    dessin = ImageDraw.Draw(image)
-    couleur, rayon = encre + (255,), epaisseur * ECHELLE / 2
+    points = [p for trait in traits for p in trait]
+    fin = 2 * ECHELLE  # dessiné deux fois plus fin, puis réduit : bords lissés
+    largeur = int((max(x for x, _y in points) + MARGE + LARGEUR_BEC) * fin)
+    hauteur = int((max(y for _x, y in points) + MARGE + LARGEUR_BEC) * fin)
+    masque = Image.new("L", (largeur, hauteur), 0)
+    dessin = ImageDraw.Draw(masque)
     for trait in traits:
-        pts = [((x + MARGE) * ECHELLE, (y + MARGE) * ECHELLE) for x, y in trait]
-        if len(pts) > 1:
-            dessin.line(pts, fill=couleur, width=epaisseur * ECHELLE)
-        for x, y in pts:  # extrémités et angles arrondis ; un simple clic fait un point
-            dessin.ellipse((x - rayon, y - rayon, x + rayon, y + rayon), fill=couleur)
+        trait = _lisser(trait)
+        for forme in polygones_plume(trait, fin):
+            dessin.polygon(forme, fill=255)
+        if len(trait) > 1:  # le délié garde toujours un filet d'encre
+            dessin.line([(x * fin, y * fin) for x, y in trait], fill=255, width=DELIE * fin)
+    masque = masque.resize((largeur // 2, hauteur // 2), Image.LANCZOS)
+    image = Image.new("RGBA", masque.size, encre + (255,))
+    image.putalpha(masque)
     return _rogner(image, MARGE * ECHELLE)
 
 
@@ -129,9 +178,10 @@ class FenetreSignature(ctk.CTkToplevel):
                               fill="#D0D4DA", dash=(4, 4), tags="guide")
         self.zone.bind("<ButtonPress-1>", self._debut_trait)
         self.zone.bind("<B1-Motion>", self._suite_trait)
+        self.zone.bind("<ButtonRelease-1>", self._fin_trait)
         bas = ctk.CTkFrame(dessiner, fg_color="transparent")
         bas.pack(fill="x")
-        ctk.CTkLabel(bas, text="Signez dans le cadre, à la souris, au doigt ou au stylet.",
+        ctk.CTkLabel(bas, text="Signez dans le cadre : le trait imite une plume (pleins et déliés).",
                      font=theme.police(12), text_color=theme.TEXTE_2).pack(side="left")
         theme.bouton(bas, "Effacer", self.effacer, style="discret", icone_nom="supprimer").pack(side="right")
 
@@ -170,24 +220,33 @@ class FenetreSignature(ctk.CTkToplevel):
 
     def _debut_trait(self, evenement):
         self.traits.append([(evenement.x, evenement.y)])
-        r = EPAISSEUR / 2
-        self.zone.create_oval(evenement.x - r, evenement.y - r, evenement.x + r, evenement.y + r,
-                              fill=self._couleur(), outline="", tags="encre")
+        self._dessiner_formes(polygones_plume(self.traits[-1]), "en_cours")
 
     def _suite_trait(self, evenement):
         if not self.traits:
             return self._debut_trait(evenement)
-        x0, y0 = self.traits[-1][-1]
         self.traits[-1].append((evenement.x, evenement.y))
-        self.zone.create_line(x0, y0, evenement.x, evenement.y, fill=self._couleur(), width=EPAISSEUR,
-                              capstyle="round", smooth=True, tags="encre")
+        self.zone.delete("en_cours")
+        self._dessiner_formes(polygones_plume(self.traits[-1]), "en_cours")
+
+    def _fin_trait(self, _evenement=None):
+        """Trait terminé : redessiné lissé, comme il sera enregistré."""
+        if self.traits:
+            self.zone.delete("en_cours")
+            self._dessiner_formes(polygones_plume(_lisser(self.traits[-1])), "fini")
+
+    def _dessiner_formes(self, formes, etat: str):
+        couleur = self._couleur()
+        for forme in formes:
+            self.zone.create_polygon(*[c for p in forme for c in p], fill=couleur, outline=couleur,
+                                     width=DELIE, tags=("encre", etat))
 
     def effacer(self):
         self.traits.clear()
         self.zone.delete("encre")
 
     def _changer_encre(self):
-        self.zone.itemconfigure("encre", fill=self._couleur())
+        self.zone.itemconfigure("encre", fill=self._couleur(), outline=self._couleur())
         self._apercu_texte()
 
     # ------------------------------------------------------- texte

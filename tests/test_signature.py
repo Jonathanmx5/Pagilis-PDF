@@ -50,3 +50,26 @@ def test_save_and_reload(tmp_path):
     assert os.path.basename(chemin) == sg.NOM_FICHIER and os.path.isfile(chemin)
     assert sg.signature_enregistree(str(tmp_path / "sous" / "dossier")) == chemin
     assert sg.signature_enregistree(str(tmp_path / "vide")) is None
+
+
+def _encre(image):
+    return sum(image.getchannel("A").histogram()[129:])
+
+
+def test_fountain_pen_has_thick_downstrokes_and_thin_hairlines():
+    # Plume biseautée : un trait dans le sens du bec (vers le haut à droite) est un délié,
+    # un trait en travers (vers le bas à droite) est un plein.
+    delie = sg.image_trace([[(0, 100), (100, 0)]], sg.ENCRES["Noire"])
+    plein = sg.image_trace([[(0, 0), (100, 100)]], sg.ENCRES["Noire"])
+    assert _encre(plein) > 2.5 * _encre(delie)
+
+
+def test_pen_edges_are_smooth():
+    image = sg.image_trace([[(0, 50), (40, 10), (80, 60), (120, 20)]], sg.ENCRES["Bleue"])
+    assert sum(image.getchannel("A").histogram()[1:255]), "bords lissés (anticrénelage)"
+
+
+def test_live_preview_polygons_follow_the_stroke():
+    assert sg.polygones_plume([(10, 10)]), "un simple clic laisse une goutte d'encre"
+    polygones = sg.polygones_plume([(10, 10), (30, 30), (60, 20)])
+    assert polygones and all(len(p) >= 4 for p in polygones)

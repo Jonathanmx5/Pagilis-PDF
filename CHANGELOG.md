@@ -11,6 +11,10 @@ Numérotation : MAJEUR.MINEUR.CORRECTIF.
 Une bêta (tag `v1.2.0-beta.1`) reprend les notes de sa version (`1.2.0`) si
 elle n'a pas de section propre.
 
+## [1.9.0]
+
+- Signature tracée : le trait imite un stylo plume, avec des pleins épais, des déliés fins, des bords lisses et un tracé adouci.
+
 ## [1.8.0]
 
 - Signer : créez votre signature dans le logiciel, en la traçant à la souris, au doigt ou au stylet, ou en écrivant votre nom dans une police manuscrite. Encre noire ou bleue.
