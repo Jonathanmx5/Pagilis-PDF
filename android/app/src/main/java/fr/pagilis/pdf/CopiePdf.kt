@@ -268,6 +268,71 @@ class CopiePdf(octets: ByteArray, private val dossierTemp: File, motDePasse: Str
             mk.put("BC", doc.newArray().apply { push(0.24f); push(0.48f); push(0.96f) })
             w.getObject().put("MK", mk)
             w.update(); page.update()
+            // Apparence en français, à la place de l'étiquette « SIGN » de MuPDF.
+            w.getObject().put("AP", doc.newDictionary().apply { put("N", apparenceCase(rect, unique)) })
+            true
+        }
+    }
+
+    /** Cadre bleu léger, « Signer ici : nom » en bas à gauche et une ligne pour signer. */
+    private fun apparenceCase(rect: Rect, nom: String): PDFObject {
+        val w = rect.x1 - rect.x0
+        val h = rect.y1 - rect.y0
+        val taille = minOf(9f, h / 4f)
+        val texte = "Signer ici : $nom".toByteArray(WINANSI).joinToString("") { "%02X".format(it.toInt() and 0xFF) }
+        val contenu = String.format(Locale.US,
+            "q 0.94 0.96 1 rg 0 0 %.2f %.2f re f 0.24 0.48 0.96 RG 1 w 0.5 0.5 %.2f %.2f re S " +
+            "0.55 0.6 0.7 RG 0.6 w 6 %.2f m %.2f %.2f l S " +
+            "BT /Helv %.2f Tf 0.3 0.35 0.45 rg 6 4 Td <%s> Tj ET Q",
+            w, h, w - 1, h - 1, taille + 8, w - 6, taille + 8, taille, texte)
+        val police = doc.newDictionary().apply {
+            put("Type", doc.newName("Font")); put("Subtype", doc.newName("Type1"))
+            put("BaseFont", doc.newName("Helvetica")); put("Encoding", doc.newName("WinAnsiEncoding"))
+        }
+        val dict = doc.newDictionary().apply {
+            put("Type", doc.newName("XObject")); put("Subtype", doc.newName("Form"))
+            put("BBox", doc.newArray().apply { push(0f); push(0f); push(w); push(h) })
+            put("Resources", doc.newDictionary().apply { put("Font", doc.newDictionary().apply { put("Helv", police) }) })
+        }
+        return doc.addStream(contenu, dict)
+    }
+
+    // ------------------------------------------------------------- signatures posées
+
+    /** Une image posée par l'application (signature, tampon) : son nom et son rectangle affiché. */
+    data class Posee(val nom: String, val x0: Float, val y0: Float, val x1: Float, val y1: Float) {
+        fun contient(x: Float, y: Float) = x in x0..x1 && y in y0..y1
+    }
+
+    private val motifPosee = Regex("""q (/PgGs\w+ gs )?(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) cm /(PgImg\w+) Do Q""")
+
+    private fun contenuPage(page: PDFPage): String? {
+        val c = page.`object`.get("Contents")
+        return if (c.isStream) String(c.readStream(), Charsets.ISO_8859_1) else null
+    }
+
+    /** Les images posées sur la page, de la plus ancienne à la plus récente. */
+    fun imagesPosees(index: Int): List<Posee> {
+        val page = doc.loadPage(index) as PDFPage
+        val texte = contenuPage(page) ?: return emptyList()
+        return motifPosee.findAll(texte).map { m ->
+            val v = (2..7).map { m.groupValues[it].toFloat() }
+            val r = Rect(0f, 0f, 1f, 1f).transform(Matrix(v[0], v[1], v[2], v[3], v[4], v[5]).concat(page.transform))
+            Posee(m.groupValues[8], r.x0, r.y0, r.x1, r.y1)
+        }.toList()
+    }
+
+    /** Déplace (ou redimensionne) une image posée. Faux si elle n'existe pas. */
+    fun deplacerImage(index: Int, nom: String, rect: Rect): Boolean = retoucher {
+        val page = doc.loadPage(index) as PDFPage
+        val texte = contenuPage(page)
+        val m = texte?.let { t -> motifPosee.findAll(t).lastOrNull { it.groupValues[8] == nom } }
+        if (texte == null || m == null) false else {
+            val nouvelle = Matrix(rect.x1 - rect.x0, 0f, 0f, -(rect.y1 - rect.y0), rect.x0, rect.y1)
+                .concat(Matrix.Inverted(page.transform))
+            val ligne = "q ${m.groupValues[1]}${matrice(nouvelle)} cm /$nom Do Q"
+            val nouveau = texte.substring(0, m.range.first) + ligne + texte.substring(m.range.last + 1)
+            page.`object`.put("Contents", doc.addStream(Buffer().apply { writeBytes(nouveau.toByteArray(Charsets.ISO_8859_1)) }))
             true
         }
     }

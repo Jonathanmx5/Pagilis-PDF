@@ -149,43 +149,45 @@ class OutilSigner(a: MainActivity) : OutilPanneau(a), Interaction {
             p.addView(android.widget.HorizontalScrollView(a).apply { isHorizontalScrollBarEnabled = false; addView(rang) },
                 LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = a.dp(8) })
         }
+        // Une seule rangée : nouvelle signature, tampon, case à signer.
         val l = LinearLayout(a)
-        l.addView(Theme.bouton(a, if (gardees.isEmpty()) "Créer ma signature" else "＋ Nouvelle", Theme.Style.SECONDAIRE) {
+        fun b(t: String, style: Theme.Style, poids: Float, f: () -> Unit) = l.addView(
+            Theme.bouton(a, t, style, f).apply { textSize = 14f; maxLines = 1; setPadding(a.dp(8), 0, a.dp(8), 0) },
+            LinearLayout.LayoutParams(0, a.dp(48), poids).apply { if (l.childCount > 0) marginStart = a.dp(6) })
+        b(if (gardees.isEmpty()) "Créer ma signature" else "＋ Nouvelle", Theme.Style.SECONDAIRE, 1.2f) {
             Signature.creer(a) { f -> utiliser(f, "Ma signature") }
-        }, LinearLayout.LayoutParams(0, a.dp(48), 1f))
-        l.addView(Theme.bouton(a, "Tampon / image…", Theme.Style.SECONDAIRE) { a.choisirImage() },
-            LinearLayout.LayoutParams(-2, a.dp(48)).apply { marginStart = a.dp(8) })
+        }
+        b("Tampon…", Theme.Style.SECONDAIRE, 1f) { a.choisirImage() }
+        b(if (tracer) "✕ Tracé" else "▭ Case", if (tracer) Theme.Style.DANGER else Theme.Style.SECONDAIRE, 1f) {
+            tracer = !tracer; cadre = null
+            a.rafraichirPanneau()
+            a.statut(if (tracer) "Glissez sur la page pour tracer la case de signature (pour vous ou pour l'autre personne)."
+                     else "Tracé annulé.")
+        }
         p.addView(l)
-        if (a.tablette || libelle == null)
-            p.addView(Theme.texte(a, libelle ?: "Créez votre signature, ou choisissez une image (signature scannée, tampon…).",
-                if (libelle != null) Theme.TEXTE else Theme.TEXTE_2).apply { setPadding(0, a.dp(8), 0, 0) })
-        section(p, "Placement")
-        // Téléphone : le panneau reste court, la consigne est dans la ligne d'état.
-        if (a.tablette) p.addView(Theme.texte(a, "Touchez la page pour poser l'image, puis faites-la glisser.").apply { setPadding(0, 0, 0, a.dp(8)) })
-        else if (libelle != null) a.statut("$libelle : touchez la page pour la poser, puis faites-la glisser.")
+        if (a.tablette) p.addView(Theme.texte(a,
+            (libelle?.let { "$it : touchez la page pour la poser. " } ?: "Créez votre signature, ou choisissez une image (signature scannée, tampon…). ") +
+            "Une signature posée se déplace en la faisant glisser. « ▭ Case » trace une case à signer, pour vous ou pour la personne qui recevra le PDF."
+        ).apply { setPadding(0, a.dp(8), 0, 0) })
+        else if (!tracer) a.statut(libelle?.let { "$it : touchez la page pour la poser. Touchez une case encadrée pour y signer." }
+            ?: "Créez votre signature, ou choisissez une image.")
+        if (a.tablette) section(p, "Placement") else p.addView(View(a), LinearLayout.LayoutParams(1, a.dp(10)))
         curseur(p, "Taille", 40, 400, largeur.toInt(), "") { largeur = it.toFloat(); a.vue.invalidate() }
         curseur(p, "Opacité", 10, 100, opacite, " %") { opacite = it; a.vue.invalidate() }
         action(p, "Poser la signature") { poser() }
-
-        section(p, "Cases de signature")
-        if (a.tablette || tracer) p.addView(Theme.texte(a,
-            if (tracer) "Glissez sur la page pour tracer la case."
-            else "Une case à signer, pour vous ou pour la personne qui recevra le PDF. Touchez une case encadrée pour y signer."
-        ).apply { setPadding(0, 0, 0, a.dp(4)) })
-        action(p, if (tracer) "Annuler le tracé" else "▭ Créer une case de signature",
-            if (tracer) Theme.Style.DANGER else Theme.Style.SECONDAIRE) {
-            tracer = !tracer; cadre = null
-            a.rafraichirPanneau()
-            a.statut(if (tracer) "Glissez sur la page pour tracer la case de signature." else "Tracé annulé.")
-        }
     }
+
+    // Signature déjà posée que l'on fait glisser.
+    private var deplacee: CopiePdf.Posee? = null
+    private var cadreDeplace: FloatArray? = null
+    private var origine = floatArrayOf(0f, 0f)
 
     // Case de signature : en cours de tracé, ou visée par le doigt pour y signer.
     private var tracer = false
     private var cadre: FloatArray? = null
     private var caseVisee: CopiePdf.Champ? = null
 
-    override fun quitter() { tracer = false; cadre = null; caseVisee = null }
+    override fun quitter() { tracer = false; cadre = null; caseVisee = null; deplacee = null; cadreDeplace = null }
 
     private fun nommerCase(r: com.artifex.mupdf.fitz.Rect) {
         val i = a.vue.index
@@ -243,18 +245,43 @@ class OutilSigner(a: MainActivity) : OutilPanneau(a), Interaction {
         if (r != null && r.contains(x, y)) { prise = floatArrayOf(x - r.centerX(), y - r.centerY()); return }
         caseVisee = a.caseSignatureEn(x, y)
         if (caseVisee != null) { centre = null; return }
+        // Sans aperçu en cours, toucher une signature déjà posée la fait glisser.
+        if (centre == null) a.posees.lastOrNull { it.contient(x, y) }?.let { s ->
+            deplacee = s; cadreDeplace = floatArrayOf(s.x0, s.y0, s.x1, s.y1); origine = floatArrayOf(x, y)
+            return
+        }
         if (image == null) { a.statut("Créez d'abord votre signature, ou choisissez une image."); return }
         centre = floatArrayOf(x, y); prise = floatArrayOf(0f, 0f)
     }
 
     override fun glisse(x: Float, y: Float) {
         cadre?.let { it[2] = x; it[3] = y; return }
+        deplacee?.let { s ->
+            val dx = x - origine[0]; val dy = y - origine[1]
+            cadreDeplace = floatArrayOf(s.x0 + dx, s.y0 + dy, s.x1 + dx, s.y1 + dy)
+            return
+        }
         val d = prise ?: return
         centre = floatArrayOf(x - d[0], y - d[1])
     }
 
     override fun relache(x: Float, y: Float) {
         prise = null
+        deplacee?.let { s ->
+            val r = cadreDeplace!!
+            deplacee = null
+            if (kotlin.math.abs(r[0] - s.x0) + kotlin.math.abs(r[1] - s.y0) < 3f) {
+                cadreDeplace = null
+                a.statut("Faites glisser la signature pour la déplacer.")
+                return
+            }
+            val i = a.vue.index
+            a.retoucher("Déplacement…", { it.deplacerImage(i, s.nom, com.artifex.mupdf.fitz.Rect(r[0], r[1], r[2], r[3])) }) {
+                cadreDeplace = null
+                a.statut("Signature déplacée. Annuler pour revenir en arrière.")
+            }
+            return
+        }
         cadre?.let { c ->
             nommerCase(com.artifex.mupdf.fitz.Rect(minOf(c[0], c[2]), minOf(c[1], c[3]), maxOf(c[0], c[2]), maxOf(c[1], c[3])))
             return
@@ -266,6 +293,14 @@ class OutilSigner(a: MainActivity) : OutilPanneau(a), Interaction {
     }
 
     override fun dessiner(canvas: Canvas, vue: VuePage) {
+        cadreDeplace?.let { c ->
+            val z = vue.rectEcran(c[0], c[1], c[2], c[3])
+            canvas.drawRect(z, Paint().apply { color = Theme.ACCENT; alpha = 50 })
+            canvas.drawRect(z, Paint().apply {
+                style = Paint.Style.STROKE; color = Theme.ACCENT; strokeWidth = a.dp(2f)
+                pathEffect = DashPathEffect(floatArrayOf(a.dp(6f), a.dp(4f)), 0f)
+            })
+        }
         cadre?.let { c ->
             canvas.drawRect(vue.rectEcran(minOf(c[0], c[2]), minOf(c[1], c[3]), maxOf(c[0], c[2]), maxOf(c[1], c[3])), Paint().apply {
                 style = Paint.Style.STROKE; color = Theme.ACCENT; strokeWidth = a.dp(2f)
@@ -289,7 +324,7 @@ class OutilSigner(a: MainActivity) : OutilPanneau(a), Interaction {
         val i = a.vue.index
         a.retoucher("Signature…", { it.poserImage(i, com.artifex.mupdf.fitz.Rect(r.left, r.top, r.right, r.bottom), f.path, opacite / 100f) }) {
             centre = null
-            a.statut("Signature posée. Annuler pour revenir en arrière, Enregistrer pour garder.")
+            a.statut("Signature posée. Faites-la glisser pour la déplacer, Enregistrer pour garder.")
         }
     }
 }

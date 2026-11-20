@@ -97,16 +97,27 @@ class MainActivity : Activity() {
     /** Les cases du formulaire de la page affichée, encadrées en bleu en mode Lire. */
     fun majChamps() {
         val c = copie
-        if (c == null || !c.aFormulaire) { champs = emptyList(); majReperes(); return }
+        if (c == null) { champs = emptyList(); posees = emptyList(); majReperes(); return }
         val i = vue.index
-        Moteur.lancer({ c.champs(i) }) { l -> if (vue.index == i) { champs = l; majReperes() } }
+        Moteur.lancer({ (if (c.aFormulaire) c.champs(i) else emptyList()) to c.imagesPosees(i) }) { (l, p) ->
+            if (vue.index == i) { champs = l; posees = p; majReperes() }
+        }
     }
+
+    /** Signatures et tampons posés sur la page affichée : on peut les faire glisser dans Signer. */
+    var posees: List<CopiePdf.Posee> = emptyList()
+        private set
 
     private fun majReperes() {
         val l = mutableListOf<VuePage.Repere>()
-        for (ch in champs) if (!ch.lectureSeule && ch.type != com.artifex.mupdf.fitz.PDFWidget.TYPE_BUTTON &&
-            (outilActif == Outil.LIRE || (outilActif == Outil.SIGNER && ch.type == com.artifex.mupdf.fitz.PDFWidget.TYPE_SIGNATURE)))
-            l += VuePage.Repere(ch.x0, ch.y0, ch.x1, ch.y1, Theme.ACCENT, false)
+        for (ch in champs) {
+            val signature = ch.type == com.artifex.mupdf.fitz.PDFWidget.TYPE_SIGNATURE
+            // Les cases de signature vides se voient toujours, avec leur nom.
+            if (signature && ch.valeur.isEmpty())
+                l += VuePage.Repere(ch.x0, ch.y0, ch.x1, ch.y1, Theme.ACCENT, false, "Signer ici : ${ch.nom}".trimEnd(' ', ':'))
+            else if (!ch.lectureSeule && ch.type != com.artifex.mupdf.fitz.PDFWidget.TYPE_BUTTON && outilActif == Outil.LIRE)
+                l += VuePage.Repere(ch.x0, ch.y0, ch.x1, ch.y1, Theme.ACCENT, false)
+        }
         trouves.forEachIndexed { k, t ->
             if (t.page == vue.index) for (r in t.rects)
                 l += VuePage.Repere(r[0], r[1], r[2], r[3], if (k == trouve) Color.rgb(255, 140, 0) else Theme.AVERTISSEMENT, true)
@@ -268,7 +279,7 @@ class MainActivity : Activity() {
 
         zonePage = FrameLayout(this)
         vue = VuePage(this)
-        vue.pageChangee = { majNavigation(); outils[outilActif]?.pageChangee(); champs = emptyList(); majChamps() }
+        vue.pageChangee = { majNavigation(); outils[outilActif]?.pageChangee(); champs = emptyList(); posees = emptyList(); majChamps() }
         vue.tape = { x, y -> outilActif == Outil.LIRE && toucherChamp(x, y) }
         zonePage.addView(vue)
         zonePage.addView(barreNavigation(), FrameLayout.LayoutParams(-2, dp(48), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
@@ -594,7 +605,14 @@ class MainActivity : Activity() {
         majReperes()
     }
 
-    fun rafraichirPanneau() { reconstruire = true; try { choisirOutil(outilActif) } finally { reconstruire = false } }
+    /** Reconstruit le panneau de l'outil actif sans le faire remonter tout en haut. */
+    fun rafraichirPanneau() {
+        val defile = panneau.parent as? ScrollView
+        val position = defile?.scrollY ?: 0
+        reconstruire = true
+        try { choisirOutil(outilActif) } finally { reconstruire = false }
+        defile?.post { defile.scrollTo(0, position) }
+    }
 
     // ------------------------------------------------------------- état
 

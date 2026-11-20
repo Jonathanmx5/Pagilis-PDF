@@ -69,7 +69,8 @@ class VuePage(ctx: Context) : View(ctx) {
     var tape: ((Float, Float) -> Boolean)? = null
 
     /** Rectangles à montrer sur la page : cases de formulaire (contour), mots trouvés (plein). */
-    data class Repere(val x0: Float, val y0: Float, val x1: Float, val y1: Float, val couleur: Int, val plein: Boolean)
+    data class Repere(val x0: Float, val y0: Float, val x1: Float, val y1: Float, val couleur: Int, val plein: Boolean,
+                      val etiquette: String? = null)
     var reperes: List<Repere> = emptyList()
         set(v) { field = v; invalidate() }
 
@@ -122,7 +123,7 @@ class VuePage(ctx: Context) : View(ctx) {
             val page = c.doc.loadPage(i)
             val b = page.bounds
             val e = min(cible, 4096f / max(b.x1 - b.x0, b.y1 - b.y0))
-            Triple(AndroidDrawDevice.drawPage(page, Matrix(e)), b, e)
+            Triple(Rendu.page(page, Matrix(e)), b, e)
         }) { (bmp, b, e) ->
             if (gen != generation) return@lancer
             largeurPage = b.x1 - b.x0
@@ -147,6 +148,15 @@ class VuePage(ctx: Context) : View(ctx) {
                 color = r.couleur
                 if (r.plein) alpha = 90 else { style = Paint.Style.STROKE; strokeWidth = 2 * resources.displayMetrics.density; alpha = 170 }
             })
+            r.etiquette?.let { t ->
+                // Case de signature vide : fond bleuté et « Signer ici : nom », comme dans les autres lecteurs.
+                canvas.drawRect(e, Paint().apply { color = Color.rgb(240, 245, 255); alpha = 200 })
+                val d = resources.displayMetrics.density
+                val texte = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(77, 89, 115); textSize = minOf(12 * d, e.height() / 3)
+                }
+                canvas.drawText(t, e.left + 6 * d, e.bottom - 6 * d, texte)
+            }
         }
         interaction?.dessiner(canvas, this)
     }

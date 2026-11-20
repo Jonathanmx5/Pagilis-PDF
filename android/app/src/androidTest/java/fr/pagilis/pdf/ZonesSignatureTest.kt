@@ -53,6 +53,64 @@ class ZonesSignatureTest {
         assertTrue(cases(c).isEmpty())
     }
 
+    /** Pixels orangés (l'étiquette « SIGN » de MuPDF) et sombres (le texte) dans un rectangle. */
+    private fun compter(bmp: Bitmap, x0: Int, y0: Int, x1: Int, y1: Int): Pair<Int, Int> {
+        var orange = 0; var sombre = 0
+        for (y in y0 until y1) for (x in x0 until x1) {
+            val p = bmp.getPixel(x, y)
+            if (Color.red(p) > 180 && Color.green(p) < 120 && Color.blue(p) < 100) orange++
+            if (Color.red(p) < 110 && Color.green(p) < 110 && Color.blue(p) < 110) sombre++
+        }
+        return orange to sombre
+    }
+
+    @Test
+    fun caseAfficheSignerIciEnFrancais() {
+        val c = CopiePdf(asset("devis.pdf"), temp)
+        c.creerZoneSignature(0, Rect(320f, 700f, 520f, 760f), "Client"); ramasser()
+        c.ajouterTexte(0, 60f, 100f, "Autre retouche", 12f, floatArrayOf(0f, 0f, 0f)); ramasser()
+        val r = relu(c)
+        // Ce que lisent Adobe, Aperçu, Chrome : l'apparence enregistrée dans le PDF.
+        val ap = String((r.doc.loadPage(0) as com.artifex.mupdf.fitz.PDFPage).widgets[0].getObject().get("AP").get("N").readStream(), Charsets.ISO_8859_1)
+        val attendu = "Signer ici : Client".toByteArray(Charsets.ISO_8859_1).joinToString("") { "%02X".format(it.toInt() and 0xFF) }
+        assertTrue("apparence enregistrée en français", ap.contains(attendu))
+        // Ce que montre l'application : la page sans l'étiquette « SIGN » de MuPDF.
+        val bmp = Rendu.page(r.doc.loadPage(0), Matrix(1f))
+        assertEquals("pas d'étiquette « SIGN » à l'écran", 0, compter(bmp, 321, 701, 519, 759).first)
+        assertEquals("toujours une vraie case", 1, cases(r).size)
+        // Une case signée ou un autre champ reste dessiné normalement.
+        val f = CopiePdf(asset("formulaire.pdf"), temp)
+        f.remplirChamp(0, f.champs(0).first { it.type == PDFWidget.TYPE_TEXT }.numero, "Visible"); ramasser()
+        val n = f.champs(0).first { it.type == PDFWidget.TYPE_TEXT }
+        val vue = Rendu.page(relu(f).doc.loadPage(0), Matrix(2f))
+        var encre = 0
+        for (y in (n.y0 * 2).toInt() until (n.y1 * 2).toInt()) for (x in (n.x0 * 2).toInt() until (n.x1 * 2).toInt())
+            if (Color.red(vue.getPixel(x, y)) < 100) encre++
+        assertTrue("les autres champs restent visibles ($encre)", encre > 100)
+    }
+
+    @Test
+    fun signaturePoseeRetrouveeEtDeplacee() {
+        val c = CopiePdf(asset("devis.pdf"), temp)
+        assertTrue(c.poserImage(0, Rect(320f, 700f, 520f, 750f), signature().path, 0.8f)); ramasser()
+        val l = c.imagesPosees(0)
+        assertEquals(1, l.size)
+        val p = l.single()
+        assertEquals(320f, p.x0, 1f); assertEquals(700f, p.y0, 1f); assertEquals(520f, p.x1, 1f); assertEquals(750f, p.y1, 1f)
+        assertTrue(p.contient(420f, 725f))
+
+        assertTrue(c.deplacerImage(0, p.nom, Rect(60f, 600f, 260f, 650f))); ramasser()
+        val bmp = AndroidDrawDevice.drawPage(relu(c).doc.loadPage(0), Matrix(1f))
+        assertTrue("encre au nouvel endroit", Color.red(bmp.getPixel(160, 625)) < 120)
+        assertTrue("plus rien à l'ancien", Color.red(bmp.getPixel(420, 725)) > 200)
+        val q = c.imagesPosees(0).single()
+        assertEquals(60f, q.x0, 1f); assertEquals(600f, q.y0, 1f)
+        assertFalse(c.deplacerImage(0, "Inconnue", Rect(0f, 0f, 10f, 10f)))
+
+        c.annuler()
+        assertEquals(320f, c.imagesPosees(0).single().x0, 1f)
+    }
+
     @Test
     fun caseRempliePorteLaSignatureEtDisparait() {
         val c = CopiePdf(asset("devis.pdf"), temp)
