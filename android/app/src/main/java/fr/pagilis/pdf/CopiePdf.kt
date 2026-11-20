@@ -34,7 +34,10 @@ class CopiePdf(octets: ByteArray, private val dossierTemp: File, motDePasse: Str
 
     var doc: PDFDocument = ouvrir(octets, motDePasse)
         private set
-    private val annulations = ArrayDeque<Pair<ByteArray, Int>>()
+    // Instantanés d'annulation sur disque : 20 copies d'un gros scan ne tiennent pas en mémoire.
+    private val annulations = ArrayDeque<Pair<File, Int>>()
+    private val prefixe = "annul_" + java.util.UUID.randomUUID().toString().take(8) + "_"
+    private var numero = 0
     private var etat = 0
     private var prochainEtat = 1
     private var etatEnregistre = 0
@@ -62,18 +65,27 @@ class CopiePdf(octets: ByteArray, private val dossierTemp: File, motDePasse: Str
             else -> true
         }
         if (change) {
-            annulations.addLast(instantane to etat)
+            val f = File(dossierTemp, "$prefixe${numero++}.pdf")
+            f.writeBytes(instantane)
+            annulations.addLast(f to etat)
             etat = prochainEtat++
-            while (annulations.size > maxAnnulations) annulations.removeFirst()
+            while (annulations.size > maxAnnulations) annulations.removeFirst().first.delete()
         }
         return resultat
     }
 
     fun annuler(): Boolean {
-        val (octets, ancien) = annulations.removeLastOrNull() ?: return false
-        doc = ouvrir(octets, null)
+        val (f, ancien) = annulations.removeLastOrNull() ?: return false
+        doc = ouvrir(f.readBytes(), null)
+        f.delete()
         etat = ancien
         return true
+    }
+
+    /** Le document est fermé : ses instantanés d'annulation sont effacés. */
+    fun fermer() {
+        annulations.forEach { it.first.delete() }
+        annulations.clear()
     }
 
     /** Un document neuf (scan) : il n'existe encore nulle part, il faut l'enregistrer. */
@@ -208,7 +220,10 @@ class CopiePdf(octets: ByteArray, private val dossierTemp: File, motDePasse: Str
 
     /** Pose une image (PNG transparent possible) dans le rectangle affiché, à l'endroit. */
     fun poserImage(index: Int, rect: Rect, cheminImage: String, opacite: Float = 1f): Boolean = retoucher {
-        val page = doc.loadPage(index) as PDFPage
+        poser(doc.loadPage(index) as PDFPage, rect, cheminImage, opacite)
+    }
+
+    private fun poser(page: PDFPage, rect: Rect, cheminImage: String, opacite: Float): Boolean {
         val image = doc.addImage(Image(cheminImage))
         val xobjets = ressource(page, "XObject")
         val nom = nomLibre(xobjets, "PgImg")
@@ -226,7 +241,83 @@ class CopiePdf(octets: ByteArray, private val dossierTemp: File, motDePasse: Str
         val m = Matrix(rect.x1 - rect.x0, 0f, 0f, -(rect.y1 - rect.y0), rect.x0, rect.y1)
             .concat(Matrix.Inverted(page.transform))
         ajouterContenu(page, "q $transparence${matrice(m)} cm /$nom Do Q")
-        true
+        return true
+    }
+
+    // ------------------------------------------------------------- cases de signature
+
+    /**
+     * Crée une vraie case de signature (champ /Sig) : Adobe, Aperçu, un téléphone la
+     * proposent à la personne qui reçoit le PDF. Le nom est rendu unique dans le document.
+     */
+    fun creerZoneSignature(index: Int, rect: Rect, nom: String): Boolean = retoucher {
+        if (rect.x1 - rect.x0 < 20 || rect.y1 - rect.y0 < 10) false else {
+            val page = doc.loadPage(index) as PDFPage
+            val pris = (0 until nombrePages).flatMap { p ->
+                ((doc.loadPage(p) as PDFPage).widgets ?: emptyArray()).map { it.name ?: "" }
+            }.toSet()
+            val base = nom.trim().ifEmpty { "Signature" }.replace('.', ' ')
+            var unique = base
+            var n = 2
+            while (unique in pris) unique = "$base ${n++}"
+            val w = page.createSignature()
+            w.setRect(rect)
+            w.getObject().put("T", unique)
+            // Un cadre léger, pour que la case se voie aussi dans les lecteurs qui ne la soulignent pas.
+            val mk = doc.newDictionary()
+            mk.put("BC", doc.newArray().apply { push(0.24f); push(0.48f); push(0.96f) })
+            w.getObject().put("MK", mk)
+            w.update(); page.update()
+            true
+        }
+    }
+
+    /**
+     * Signe soi-même dans une case : l'image est ajustée au cadre sans être déformée,
+     * puis la case vide est retirée, pour que tous les lecteurs montrent la signature.
+     */
+    fun signerZone(index: Int, numero: Int, cheminImage: String): Boolean = retoucher {
+        val page = doc.loadPage(index) as PDFPage
+        val w = page.widgets[numero]
+        val b = w.bounds
+        val image = Image(cheminImage)
+        val ratio = image.height.toFloat() / image.width
+        val marge = 0.04f
+        val lw = (b.x1 - b.x0) * (1 - marge)
+        val lh = (b.y1 - b.y0) * (1 - marge)
+        val (iw, ih) = if (lw * ratio <= lh) lw to lw * ratio else lh / ratio to lh
+        val cx = (b.x0 + b.x1) / 2; val cy = (b.y0 + b.y1) / 2
+        retirerChamp(w.getObject())
+        page.deleteAnnotation(w)
+        page.update()
+        poser(page, Rect(cx - iw / 2, cy - ih / 2, cx + iw / 2, cy + ih / 2), cheminImage, 1f)
+    }
+
+    /** Cases de signature encore vides, sur tout le document. */
+    fun casesVides(): Int = (0 until nombrePages).sumOf { p ->
+        ((doc.loadPage(p) as PDFPage).widgets ?: emptyArray()).count { it.fieldType == com.artifex.mupdf.fitz.PDFWidget.TYPE_SIGNATURE && !it.isSigned }
+    }
+
+    /**
+     * Copie « signée, non modifiable » : annotations et cases fondues dans la page, puis
+     * droits limités à lire, imprimer et copier le texte. Les lecteurs sérieux (Adobe…)
+     * refusent alors la modification ; ce n'est pas un coffre-fort pour autant.
+     */
+    fun verrouiller(): ByteArray {
+        val copie = ouvrir(octets(), null)
+        copie.bake(true, true)
+        val proprietaire = java.util.UUID.randomUUID().toString().replace("-", "")
+        // Tous les bits à 1 sauf : modifier (8), annoter (32), remplir (256), assembler (1024) ; bits 1-2 à 0.
+        val droits = -1 and (1 or 2 or 8 or 32 or 256 or 1024).inv()
+        return versOctets(copie, "garbage=3,compress,encrypt=aes-256,owner-password=$proprietaire,permissions=$droits")
+    }
+
+    /** Retire le champ de la liste du formulaire (ou de son parent), pour qu'il n'existe plus. */
+    private fun retirerChamp(champ: PDFObject) {
+        val parent = champ.get("Parent")
+        val liste = if (parent.isNull) doc.trailer.get("Root").get("AcroForm").get("Fields") else parent.get("Kids")
+        if (!liste.isArray) return
+        for (k in liste.size() - 1 downTo 0) if (liste.get(k).asIndirect() == champ.asIndirect()) liste.delete(k)
     }
 
     // ------------------------------------------------------------- formulaires

@@ -31,7 +31,7 @@ import kotlin.math.max
 enum class Outil(val libelle: String, val court: String, val symbole: String, val titre: String, val description: String,
                  val exigeDocument: Boolean) {
     LIRE("Lire", "Lire", "📖", "Lire", "Glissez pour changer de page, pincez pour zoomer. Touchez une case de formulaire pour la remplir.", false),
-    SIGNER("Signer", "Signer", "✒️", "Signer", "Posez votre signature (ou un tampon) sur la page.", true),
+    SIGNER("Signer", "Signer", "✒️", "Signer", "Posez votre signature (ou un tampon) sur la page, ou créez des cases à signer.", true),
     TEXTE("Texte", "Texte", "Aa", "Ajouter du texte", "Une date, une mention : touchez la page à l'endroit voulu.", true),
     ANNOTER("Annoter", "Annoter", "🖍", "Annoter", "Surligner, dessiner, encadrer, laisser une note. Lisibles dans tous les lecteurs PDF.", true),
     PAGES("Pages", "Pages", "▦", "Pages", "Touchez les vignettes pour les choisir. Restez appuyé puis glissez pour changer l'ordre.", true),
@@ -115,6 +115,10 @@ class OutilSigner(a: MainActivity) : OutilPanneau(a), Interaction {
 
     override fun construire(p: LinearLayout) {
         val gardees = Signature.liste(a)
+        // Signature créée ailleurs (en touchant une case) : elle devient la signature choisie.
+        if (image?.exists() != true && gardees.isNotEmpty()) {
+            image = gardees.last(); ratio = Signature.ratio(image!!); libelle = "Ma signature"; apercu = null
+        }
         section(p, if (gardees.isEmpty()) "Image" else "Mes signatures et tampons")
         if (gardees.isNotEmpty()) {
             // Signature complète, initiales… : on touche pour choisir, on reste appuyé pour supprimer.
@@ -162,6 +166,47 @@ class OutilSigner(a: MainActivity) : OutilPanneau(a), Interaction {
         curseur(p, "Taille", 40, 400, largeur.toInt(), "") { largeur = it.toFloat(); a.vue.invalidate() }
         curseur(p, "Opacité", 10, 100, opacite, " %") { opacite = it; a.vue.invalidate() }
         action(p, "Poser la signature") { poser() }
+
+        section(p, "Cases de signature")
+        if (a.tablette || tracer) p.addView(Theme.texte(a,
+            if (tracer) "Glissez sur la page pour tracer la case."
+            else "Une case à signer, pour vous ou pour la personne qui recevra le PDF. Touchez une case encadrée pour y signer."
+        ).apply { setPadding(0, 0, 0, a.dp(4)) })
+        action(p, if (tracer) "Annuler le tracé" else "▭ Créer une case de signature",
+            if (tracer) Theme.Style.DANGER else Theme.Style.SECONDAIRE) {
+            tracer = !tracer; cadre = null
+            a.rafraichirPanneau()
+            a.statut(if (tracer) "Glissez sur la page pour tracer la case de signature." else "Tracé annulé.")
+        }
+    }
+
+    // Case de signature : en cours de tracé, ou visée par le doigt pour y signer.
+    private var tracer = false
+    private var cadre: FloatArray? = null
+    private var caseVisee: CopiePdf.Champ? = null
+
+    override fun quitter() { tracer = false; cadre = null; caseVisee = null }
+
+    private fun nommerCase(r: com.artifex.mupdf.fitz.Rect) {
+        val i = a.vue.index
+        val saisie = EditText(a).apply {
+            setText("Client"); selectAll(); setSingleLine()
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+        }
+        val d = AlertDialog.Builder(a).setTitle("Qui signe ici ?")
+            .setMessage("Ce nom s'affiche dans les lecteurs PDF (Client, Vendeur, Moi…).").setView(saisie)
+            .setPositiveButton("Créer la case") { _, _ ->
+                val nom = saisie.text.toString()
+                a.retoucher("Case de signature…", { it.creerZoneSignature(i, r, nom) }) { ok ->
+                    cadre = null; tracer = false
+                    a.rafraichirPanneau()
+                    a.statut(if (ok) "Case créée. Touchez-la pour y signer, ou envoyez le PDF pour la faire signer."
+                             else "Case trop petite : tracez un rectangle plus grand.")
+                }
+            }
+            .setNegativeButton("Annuler") { _, _ -> cadre = null; a.vue.invalidate() }.create()
+        d.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+        d.show()
     }
 
     private fun utiliser(f: File, nom: String) {
@@ -192,20 +237,41 @@ class OutilSigner(a: MainActivity) : OutilPanneau(a), Interaction {
     }
 
     override fun appui(x: Float, y: Float) {
-        if (image == null) { a.statut("Créez d'abord votre signature, ou choisissez une image."); return }
+        caseVisee = null
+        if (tracer) { cadre = floatArrayOf(x, y, x, y); return }
         val r = rect()
-        if (r != null && r.contains(x, y)) prise = floatArrayOf(x - r.centerX(), y - r.centerY())
-        else { centre = floatArrayOf(x, y); prise = floatArrayOf(0f, 0f) }
+        if (r != null && r.contains(x, y)) { prise = floatArrayOf(x - r.centerX(), y - r.centerY()); return }
+        caseVisee = a.caseSignatureEn(x, y)
+        if (caseVisee != null) { centre = null; return }
+        if (image == null) { a.statut("Créez d'abord votre signature, ou choisissez une image."); return }
+        centre = floatArrayOf(x, y); prise = floatArrayOf(0f, 0f)
     }
 
     override fun glisse(x: Float, y: Float) {
+        cadre?.let { it[2] = x; it[3] = y; return }
         val d = prise ?: return
         centre = floatArrayOf(x - d[0], y - d[1])
     }
 
-    override fun relache(x: Float, y: Float) { prise = null }
+    override fun relache(x: Float, y: Float) {
+        prise = null
+        cadre?.let { c ->
+            nommerCase(com.artifex.mupdf.fitz.Rect(minOf(c[0], c[2]), minOf(c[1], c[3]), maxOf(c[0], c[2]), maxOf(c[1], c[3])))
+            return
+        }
+        // Toucher une case : on demande toujours laquelle (signature complète, initiales…).
+        val ch = caseVisee ?: return
+        caseVisee = null
+        if (ch.contient(x, y)) { centre = null; a.signerCase(ch, null) }
+    }
 
     override fun dessiner(canvas: Canvas, vue: VuePage) {
+        cadre?.let { c ->
+            canvas.drawRect(vue.rectEcran(minOf(c[0], c[2]), minOf(c[1], c[3]), maxOf(c[0], c[2]), maxOf(c[1], c[3])), Paint().apply {
+                style = Paint.Style.STROKE; color = Theme.ACCENT; strokeWidth = a.dp(2f)
+                pathEffect = DashPathEffect(floatArrayOf(a.dp(6f), a.dp(4f)), 0f)
+            })
+        }
         val r = rect() ?: return
         val f = image ?: return
         if (apercu == null) apercu = Signature.apercu(f)

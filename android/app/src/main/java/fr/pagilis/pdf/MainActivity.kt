@@ -104,7 +104,8 @@ class MainActivity : Activity() {
 
     private fun majReperes() {
         val l = mutableListOf<VuePage.Repere>()
-        if (outilActif == Outil.LIRE) for (ch in champs) if (!ch.lectureSeule && ch.type != com.artifex.mupdf.fitz.PDFWidget.TYPE_BUTTON)
+        for (ch in champs) if (!ch.lectureSeule && ch.type != com.artifex.mupdf.fitz.PDFWidget.TYPE_BUTTON &&
+            (outilActif == Outil.LIRE || (outilActif == Outil.SIGNER && ch.type == com.artifex.mupdf.fitz.PDFWidget.TYPE_SIGNATURE)))
             l += VuePage.Repere(ch.x0, ch.y0, ch.x1, ch.y1, Theme.ACCENT, false)
         trouves.forEachIndexed { k, t ->
             if (t.page == vue.index) for (r in t.rects)
@@ -145,10 +146,24 @@ class MainActivity : Activity() {
                 d.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
                 d.show()
             }
-            ch.type == com.artifex.mupdf.fitz.PDFWidget.TYPE_SIGNATURE -> statut("Case de signature : utilisez l'outil Signer.")
+            ch.type == com.artifex.mupdf.fitz.PDFWidget.TYPE_SIGNATURE -> signerCase(ch, null)
             else -> return false
         }
         return true
+    }
+
+    /** La case de signature sous le doigt, sur la page affichée. */
+    fun caseSignatureEn(x: Float, y: Float): CopiePdf.Champ? =
+        champs.lastOrNull { it.type == com.artifex.mupdf.fitz.PDFWidget.TYPE_SIGNATURE && !it.lectureSeule && it.contient(x, y) }
+
+    /** Signer dans une case : avec l'image donnée, sinon on demande laquelle parmi les signatures gardées. */
+    fun signerCase(ch: CopiePdf.Champ, image: java.io.File?) {
+        val i = vue.index
+        if (image == null) return Signature.choisir(this, ch.nom.ifBlank { "Signer ici" }) { f -> signerCase(ch, f) }
+        retoucher("Signature…", { it.signerZone(i, ch.numero, image.path) }) {
+            if (outilActif == Outil.SIGNER) rafraichirPanneau()
+            statut("Signé dans la case « ${ch.nom} ». Annuler pour revenir en arrière, Enregistrer pour garder.")
+        }
     }
 
     // ------------------------------------------------------------- recherche
@@ -214,6 +229,8 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Instantanés d'annulation laissés par une fermeture brutale : plus aucun document ne les utilise.
+        cacheDir.listFiles { f -> f.name.startsWith("annul_") }?.forEach { it.delete() }
         window.statusBarColor = Theme.SURFACE
         window.navigationBarColor = Theme.SURFACE
         construire()
@@ -375,12 +392,14 @@ class MainActivity : Activity() {
         }
         m.menu.add(0, 3, 2, "Scanner un document")
         m.menu.add(0, 4, 3, "Rechercher dans le PDF").isEnabled = copie != null && !occupe
+        m.menu.add(0, 5, 4, "Copies de secours").isEnabled = !occupe
         m.setOnMenuItemClickListener {
             when (it.itemId) {
                 1 -> confirmerAbandon { choisirFichier() }
                 2 -> partager()
                 3 -> confirmerAbandon { scanner.commencer() }
                 4 -> rechercher()
+                5 -> copiesDeSecours()
             }
             true
         }
@@ -683,6 +702,29 @@ class MainActivity : Activity() {
         }
     }
 
+    /** Les versions gardées avant chaque « Remplacer » : on en rouvre une comme un document neuf. */
+    private fun copiesDeSecours() {
+        val l = Secours.liste(Secours.dossier(filesDir))
+        if (l.isEmpty()) {
+            AlertDialog.Builder(this).setTitle("Copies de secours")
+                .setMessage("Aucune pour l'instant. Chaque fois que vous remplacez un PDF, sa version d'avant est gardée ici (les 10 dernières).")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        val f = java.text.SimpleDateFormat("dd/MM HH'h'mm", java.util.Locale.FRANCE)
+        AlertDialog.Builder(this).setTitle("Copies de secours (avant remplacement)")
+            .setItems(l.map { "${it.nom}\n${f.format(java.util.Date(it.quand))} · ${taille(it.fichier.length())}" }.toTypedArray()) { _, k ->
+                val s = l[k]
+                confirmerAbandon {
+                    travailler("Ouverture…", { CopiePdf(s.fichier.readBytes(), cacheDir).also { it.marquerNonEnregistre() } }) { c ->
+                        val quand = java.text.SimpleDateFormat("dd-MM HH'h'mm", java.util.Locale.FRANCE).format(java.util.Date(s.quand))
+                        installer(c, s.nom.removeSuffix(".pdf") + " (secours $quand).pdf", null)
+                        statut("Copie de secours ouverte. Enregistrer pour la récupérer.")
+                    }
+                }
+            }.setNegativeButton("Fermer", null).show()
+    }
+
     /** Le PDF du scanner : un document neuf, à enregistrer. */
     fun ouvrirScan(octets: ByteArray) {
         travailler("Ouverture du scan…", { CopiePdf(octets, cacheDir).also { it.marquerNonEnregistre() } }) { c ->
@@ -693,6 +735,7 @@ class MainActivity : Activity() {
     }
 
     private fun installer(c: CopiePdf, n: String, uri: Uri?) {
+        if (copie !== c) copie?.fermer()
         copie = c
         nom = n
         source = uri
@@ -727,12 +770,31 @@ class MainActivity : Activity() {
             if (remplacable) "Remplacer « $nom »" else null,
             "Enregistrer une copie…",
             "Copie allégée (pour un e-mail)…",
-            "Copie protégée par mot de passe…")
+            "Copie protégée par mot de passe…",
+            "Copie verrouillée (une fois signé)…")
         val base = nom.removeSuffix(".pdf")
         AlertDialog.Builder(this).setTitle("Enregistrer").setItems(choix.toTypedArray()) { _, i ->
             when (choix[i]) {
-                choix.first().takeIf { remplacable } -> travailler("Enregistrement…", { c.enregistrer().also { ecrire(source!!, it) } }) {
-                    statut("Enregistré : $nom")
+                choix.first().takeIf { remplacable } -> travailler("Enregistrement…", {
+                    val uri = source!!
+                    val octets = c.enregistrer()
+                    // L'ancienne version d'abord, pour pouvoir revenir en arrière quoi qu'il arrive.
+                    Secours.garder(Secours.dossier(filesDir), nom, lire(uri))
+                    try { ecrire(uri, octets) } catch (e: Exception) { c.marquerNonEnregistre(); throw e }
+                }) {
+                    statut("Enregistré : $nom. L'ancienne version est gardée (⋮ › Copies de secours).")
+                }
+                "Copie verrouillée (une fois signé)…" -> travailler("Vérification…", { c.casesVides() }) { vides ->
+                    AlertDialog.Builder(this).setTitle("Copie verrouillée")
+                        .setMessage((if (vides > 0) "⚠ Il reste $vides case(s) de signature vide(s) : elles ne pourront plus être signées.\n\n" else "") +
+                            "Signatures, annotations et cases sont fondues dans la page. Le PDF s'ouvre normalement, " +
+                            "s'imprime et se copie, mais Adobe et les principaux lecteurs refusent de le modifier.\n\n" +
+                            "Ce n'est pas une protection absolue : un outil spécialisé peut lever ce verrou.")
+                        .setPositiveButton("Verrouiller") { _, _ ->
+                            travailler("Verrouillage…", { c.verrouiller() }) { octets ->
+                                ecrireNouveau(octets, "$base (signé).pdf") { statut("Copie verrouillée enregistrée. Votre document de travail reste modifiable.") }
+                            }
+                        }.setNegativeButton("Annuler", null).show()
                 }
                 "Enregistrer une copie…" -> travailler("Préparation…", { c.enregistrer() }) { octets ->
                     ecrireNouveau(octets, if (source == null) nom else "$base (modifié).pdf") { uri ->

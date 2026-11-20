@@ -111,6 +111,36 @@ object Signature {
         return if (o.outWidth > 0) o.outHeight.toFloat() / o.outWidth else 0.4f
     }
 
+    /**
+     * « Quelle signature ? » : les signatures et tampons gardés en miniatures, plus
+     * « Nouvelle signature ». Sans signature gardée, on passe directement à la création.
+     */
+    fun choisir(ctx: Context, titre: String, fin: (File) -> Unit) {
+        val gardees = liste(ctx)
+        if (gardees.isEmpty()) return creer(ctx, fin)
+        var dlg: android.app.AlertDialog? = null
+        val grille = android.widget.GridLayout(ctx).apply { columnCount = 2; setPadding(ctx.dp(16), ctx.dp(8), ctx.dp(16), 0) }
+        for (f in gardees.reversed()) {
+            grille.addView(android.widget.ImageView(ctx).apply {
+                scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                setPadding(ctx.dp(6), ctx.dp(4), ctx.dp(6), ctx.dp(4))
+                background = android.graphics.drawable.LayerDrawable(arrayOf(Theme.damier(ctx),
+                    Theme.fond(android.graphics.Color.TRANSPARENT, ctx.dp(8f), Theme.BORDURE, ctx.dp(1))))
+                clipToOutline = true
+                setImageBitmap(apercu(f))
+                contentDescription = "Signature"
+                setOnClickListener { dlg?.dismiss(); fin(f) }
+            }, android.widget.GridLayout.LayoutParams(android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED),
+                android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f)).apply {
+                width = 0; height = ctx.dp(64); setMargins(ctx.dp(4), ctx.dp(4), ctx.dp(4), ctx.dp(4))
+            })
+        }
+        dlg = android.app.AlertDialog.Builder(ctx).setTitle(titre)
+            .setView(android.widget.ScrollView(ctx).apply { addView(grille) })
+            .setPositiveButton("＋ Nouvelle signature") { _, _ -> creer(ctx, fin) }
+            .setNegativeButton("Annuler", null).show()
+    }
+
     /** Fenêtre « Créer ma signature » ; fin(fichier) reçoit la signature enregistrée. */
     fun creer(ctx: Context, fin: (File) -> Unit) {
         val d = Dialog(ctx)
