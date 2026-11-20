@@ -6,9 +6,11 @@ import com.artifex.mupdf.fitz.Document
 import com.artifex.mupdf.fitz.Font
 import com.artifex.mupdf.fitz.Image
 import com.artifex.mupdf.fitz.Matrix
+import com.artifex.mupdf.fitz.PDFAnnotation
 import com.artifex.mupdf.fitz.PDFDocument
 import com.artifex.mupdf.fitz.PDFObject
 import com.artifex.mupdf.fitz.PDFPage
+import com.artifex.mupdf.fitz.Point
 import com.artifex.mupdf.fitz.Rect
 import java.io.File
 import java.nio.charset.Charset
@@ -74,12 +76,64 @@ class CopiePdf(octets: ByteArray, private val dossierTemp: File, motDePasse: Str
         return true
     }
 
-    /** Le PDF à écrire : nettoyé et compressé, sans toucher à la copie de travail. */
-    fun enregistrer(): ByteArray {
+    /** Un document neuf (scan) : il n'existe encore nulle part, il faut l'enregistrer. */
+    fun marquerNonEnregistre() { etatEnregistre = -1 }
+
+    /**
+     * Le PDF à écrire : nettoyé et compressé, sans toucher à la copie de travail.
+     * Avec un mot de passe, le PDF est chiffré (AES 256) et ne s'ouvre plus sans lui.
+     */
+    fun enregistrer(motDePasse: String? = null): ByteArray {
         val copie = ouvrir(octets(), null)
-        val resultat = versOctets(copie, "garbage=3,compress")
+        val resultat = versOctets(copie, "garbage=3,compress" + optionsChiffrement(motDePasse))
         etatEnregistre = etat
         return resultat
+    }
+
+    /**
+     * Comme enregistrer(), en allégeant les photos et les scans : chaque image en couleur
+     * ou en gris est réduite à `cote` pixels au plus et réécrite en JPEG, si elle y gagne.
+     */
+    fun compresser(cote: Int = 1600, qualite: Int = 70): ByteArray {
+        val copie = ouvrir(octets(), null)
+        for (num in 1 until copie.countObjects()) {
+            try { alleger(copie, copie.newIndirect(num, 0), cote, qualite) } catch (_: Exception) { /* image laissée telle quelle */ }
+        }
+        val resultat = versOctets(copie, "garbage=4,compress")
+        etatEnregistre = etat
+        return resultat
+    }
+
+    private fun alleger(d: PDFDocument, o: PDFObject, cote: Int, qualite: Int) {
+        if (!o.isStream || o.get("Subtype").asName() != "Image") return
+        if (!o.get("SMask").isNull || !o.get("Mask").isNull || o.get("ImageMask").asBoolean()) return
+        if (o.get("BitsPerComponent").asInteger() < 8) return   // scans noir et blanc : déjà légers
+        val brut = o.readRawStream()
+        if (brut.size < 40_000) return
+        val pix = d.loadImage(o).toPixmap()
+        val n = pix.numberOfComponents
+        if (pix.alpha || (n != 1 && n != 3)) return
+        val w = pix.width; val h = pix.height; val pas = pix.stride
+        val ech = pix.samples
+        val px = IntArray(w * h)
+        for (y in 0 until h) for (x in 0 until w) {
+            val k = y * pas + x * n
+            val r = ech[k].toInt() and 0xFF
+            val g = if (n == 3) ech[k + 1].toInt() and 0xFF else r
+            val b = if (n == 3) ech[k + 2].toInt() and 0xFF else r
+            px[y * w + x] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+        }
+        var bmp = android.graphics.Bitmap.createBitmap(px, w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        val e = minOf(1f, cote.toFloat() / maxOf(w, h))
+        if (e < 1f) bmp = android.graphics.Bitmap.createScaledBitmap(bmp, (w * e).toInt().coerceAtLeast(1), (h * e).toInt().coerceAtLeast(1), true)
+        val jpeg = java.io.ByteArrayOutputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, qualite, it); it.toByteArray() }
+        if (jpeg.size >= brut.size * 0.9) return
+        o.writeRawStream(Buffer().apply { writeBytes(jpeg) })
+        o.put("Filter", d.newName("DCTDecode"))
+        o.delete("DecodeParms"); o.delete("Decode")
+        o.put("Width", bmp.width); o.put("Height", bmp.height)
+        o.put("BitsPerComponent", 8)
+        o.put("ColorSpace", d.newName("DeviceRGB"))
     }
 
     private fun versOctets(d: PDFDocument, options: String): ByteArray {
@@ -175,6 +229,127 @@ class CopiePdf(octets: ByteArray, private val dossierTemp: File, motDePasse: Str
         true
     }
 
+    // ------------------------------------------------------------- formulaires
+
+    /** Une case de formulaire : son rectangle affiché, son type (PDFWidget.TYPE_*), sa valeur. */
+    data class Champ(val numero: Int, val x0: Float, val y0: Float, val x1: Float, val y1: Float, val type: Int,
+                     val valeur: String, val options: List<String>, val nom: String,
+                     val lectureSeule: Boolean, val multiligne: Boolean) {
+        fun contient(x: Float, y: Float, marge: Float = 4f) = x in x0 - marge..x1 + marge && y in y0 - marge..y1 + marge
+    }
+
+    val aFormulaire: Boolean get() {
+        val champs = doc.trailer.get("Root").get("AcroForm").get("Fields")
+        return champs.isArray && champs.size() > 0
+    }
+
+    fun champs(index: Int): List<Champ> {
+        val page = doc.loadPage(index) as PDFPage
+        return (page.widgets ?: emptyArray()).mapIndexed { k, w ->
+            val b = w.bounds
+            Champ(k, b.x0, b.y0, b.x1, b.y1, w.fieldType, w.value ?: "",
+                if (w.isChoice) (w.options ?: emptyArray()).toList() else emptyList(),
+                (w.label ?: "").ifBlank { w.name ?: "" }, w.isReadOnly, w.isText && w.isMultiline)
+        }
+    }
+
+    /** Texte ou choix d'une liste. Faux si le PDF refuse la valeur. */
+    fun remplirChamp(index: Int, numero: Int, valeur: String): Boolean = retoucher {
+        val page = doc.loadPage(index) as PDFPage
+        val w = page.widgets[numero]
+        val ok = if (w.isChoice) w.setChoiceValue(valeur) else w.setTextValue(valeur)
+        w.update(); page.update()
+        ok
+    }
+
+    /** Case à cocher ou bouton radio. */
+    fun basculerChamp(index: Int, numero: Int): Boolean = retoucher {
+        val page = doc.loadPage(index) as PDFPage
+        val w = page.widgets[numero]
+        w.toggle(); w.update(); page.update()
+        true
+    }
+
+    // ------------------------------------------------------------- annotations
+
+    /** Surligne le texte entre deux points (comme une sélection). Faux s'il n'y a pas de texte. */
+    fun surligner(index: Int, xa: Float, ya: Float, xb: Float, yb: Float, rvb: FloatArray): Boolean = retoucher {
+        val page = doc.loadPage(index) as PDFPage
+        val quads = page.toStructuredText().highlight(Point(xa, ya), Point(xb, yb))
+        if (quads.isNullOrEmpty()) false else {
+            val an = page.createAnnotation(PDFAnnotation.TYPE_HIGHLIGHT)
+            an.setColor(rvb)
+            an.setQuadPoints(quads)
+            an.update(); page.update()
+            true
+        }
+    }
+
+    /** Trait à main levée : une liste de traits, chacun une suite de points [x, y]. */
+    fun dessiner(index: Int, traits: List<List<FloatArray>>, rvb: FloatArray, epaisseur: Float): Boolean = retoucher {
+        val bons = traits.filter { it.size >= 2 }
+        if (bons.isEmpty()) false else {
+            val page = doc.loadPage(index) as PDFPage
+            val an = page.createAnnotation(PDFAnnotation.TYPE_INK)
+            an.setInkList(bons.map { t -> t.map { Point(it[0], it[1]) }.toTypedArray() }.toTypedArray())
+            an.setColor(rvb)
+            an.setBorderWidth(epaisseur)
+            an.update(); page.update()
+            true
+        }
+    }
+
+    fun encadrer(index: Int, rect: Rect, rvb: FloatArray): Boolean = retoucher {
+        if (rect.x1 - rect.x0 < 3 || rect.y1 - rect.y0 < 3) false else {
+            val page = doc.loadPage(index) as PDFPage
+            val an = page.createAnnotation(PDFAnnotation.TYPE_SQUARE)
+            an.setRect(rect)
+            an.setColor(rvb)
+            an.setBorderWidth(2f)
+            an.update(); page.update()
+            true
+        }
+    }
+
+    /** Note repliée (icône), son texte s'affiche dans les lecteurs PDF. */
+    fun noter(index: Int, x: Float, y: Float, texte: String): Boolean = retoucher {
+        if (texte.isBlank()) false else {
+            val page = doc.loadPage(index) as PDFPage
+            val an = page.createAnnotation(PDFAnnotation.TYPE_TEXT)
+            an.setRect(Rect(x - 10, y - 10, x + 10, y + 10))
+            an.setContents(texte.trim())
+            an.setColor(floatArrayOf(1f, 0.8f, 0f))
+            an.setIcon("Comment")
+            an.update(); page.update()
+            true
+        }
+    }
+
+    /** Supprime l'annotation sous le point (la plus haute). Faux s'il n'y en a pas. */
+    fun effacerAnnotation(index: Int, x: Float, y: Float): Boolean = retoucher {
+        val page = doc.loadPage(index) as PDFPage
+        val cible = (page.annotations ?: emptyArray()).lastOrNull { a ->
+            val b = a.bounds
+            x in b.x0 - 6..b.x1 + 6 && y in b.y0 - 6..b.y1 + 6
+        }
+        if (cible == null) false else { page.deleteAnnotation(cible); page.update(); true }
+    }
+
+    // ------------------------------------------------------------- recherche
+
+    /** Un résultat : la page et les rectangles du mot trouvé (plusieurs s'il passe à la ligne). */
+    data class Trouve(val page: Int, val rects: List<FloatArray>)
+
+    fun rechercher(texte: String): List<Trouve> {
+        val cherche = texte.trim()
+        if (cherche.isEmpty()) return emptyList()
+        return (0 until nombrePages).flatMap { i ->
+            (doc.loadPage(i).search(cherche) ?: emptyArray()).map { quads ->
+                Trouve(i, quads.map { q -> val r = q.toRect(); floatArrayOf(r.x0, r.y0, r.x1, r.y1) })
+            }
+        }
+    }
+
     /**
      * Ajoute `contenu` par-dessus la page. Le contenu de la page devient UN flux :
      * « q » + ancien contenu + « Q » + ajout. On évite PDFObject.push(), qui perd
@@ -222,6 +397,14 @@ class CopiePdf(octets: ByteArray, private val dossierTemp: File, motDePasse: Str
 
     companion object {
         val WINANSI: Charset = Charset.forName("windows-1252")
+
+        /** Options MuPDF de chiffrement ; la virgule sépare les options, elle est donc refusée. */
+        fun optionsChiffrement(motDePasse: String?): String {
+            if (motDePasse == null) return ""
+            if (motDePasse.isEmpty()) throw ErreurPdf("Le mot de passe est vide.")
+            if (',' in motDePasse) throw ErreurPdf("Le mot de passe ne peut pas contenir de virgule.")
+            return ",encrypt=aes-256,user-password=$motDePasse,owner-password=$motDePasse"
+        }
 
         /**
          * MuPDF lit le PDF directement dans le tableau d'octets, au fil des besoins,
@@ -285,6 +468,24 @@ object Assemblage {
         }
         if (resultat.isEmpty()) throw ErreurPdf("Indiquez au moins une plage, par exemple 1-3, 5.")
         return resultat
+    }
+
+    /** Un PDF d'une page par image JPEG (scan), chaque page à la largeur d'un A4. */
+    fun depuisImages(jpegs: List<ByteArray>): ByteArray {
+        val d = PDFDocument()
+        for (j in jpegs) {
+            val img = Image(j)
+            val pw = 595f
+            val ph = pw * img.height / img.width
+            val xobjets = d.newDictionary()
+            xobjets.put("Im0", d.addImage(img))
+            val ressources = d.newDictionary()
+            ressources.put("XObject", xobjets)
+            val page = d.addPage(Rect(0f, 0f, pw, ph), 0, ressources,
+                String.format(Locale.US, "q %.3f 0 0 %.3f 0 0 cm /Im0 Do Q", pw, ph))
+            d.insertPage(d.countPages(), page)
+        }
+        return enOctets(d)
     }
 
     fun enOctets(d: PDFDocument): ByteArray {

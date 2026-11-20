@@ -83,8 +83,18 @@ class PadSignature(ctx: Context) : View(ctx) {
 }
 
 object Signature {
-    fun fichier(ctx: Context) = File(ctx.filesDir, "signature.png")
-    fun enregistree(ctx: Context): File? = fichier(ctx).takeIf { it.isFile }
+    /** Les signatures gardées : signature complète, initiales, paraphe… une image par fichier. */
+    fun dossier(ctx: Context) = File(ctx.filesDir, "signatures").apply { mkdirs() }
+
+    fun liste(ctx: Context): List<File> {
+        // Avant la 0.3.0, une seule signature : signature.png. On la range avec les autres.
+        val ancienne = File(ctx.filesDir, "signature.png")
+        if (ancienne.isFile) ancienne.renameTo(File(dossier(ctx), "sig_0.png"))
+        return dossier(ctx).listFiles { f -> f.name.endsWith(".png") }.orEmpty().sortedBy { it.name.removePrefix("sig_").removeSuffix(".png").toLongOrNull() ?: 0 }
+    }
+
+    fun nouveau(ctx: Context) = File(dossier(ctx), "sig_${System.currentTimeMillis()}.png")
+    fun enregistree(ctx: Context): File? = liste(ctx).lastOrNull()
 
     /** Image réduite pour l'aperçu à l'écran (une image trop grande ne s'afficherait pas). */
     fun apercu(f: File): Bitmap? {
@@ -109,15 +119,19 @@ object Signature {
         val corps = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             background = Theme.fond(Theme.SURFACE, ctx.dp(14f))
-            setPadding(ctx.dp(24), ctx.dp(20), ctx.dp(24), ctx.dp(20))
+            setPadding(ctx.dp(20), ctx.dp(20), ctx.dp(20), ctx.dp(20))
             addView(Theme.titre(ctx, "Créer ma signature", 20f))
             addView(Theme.texte(ctx, "Signez au doigt ou au stylet : le trait imite un stylo plume. " +
                 "Elle sera gardée sur cet appareil."), LinearLayout.LayoutParams(-1, -2).apply { topMargin = ctx.dp(4) })
-            addView(pad, LinearLayout.LayoutParams(-1, ctx.dp(240)).apply { topMargin = ctx.dp(16) })
-            val bas = LinearLayout(ctx).apply { gravity = android.view.Gravity.CENTER_VERTICAL }
-            bas.addView(Theme.texte(ctx, "Encre  ", Theme.TEXTE))
-            bas.addView(Theme.Segments(ctx, ENCRES.keys.toList(), "Bleue") { pad.encre = ENCRES.getValue(it) },
+            addView(pad, LinearLayout.LayoutParams(-1, ctx.dp(if (ctx.resources.configuration.screenWidthDp < 560) 200 else 240)).apply { topMargin = ctx.dp(16) })
+            // Téléphone : l'encre sur sa propre ligne, les boutons dessous.
+            val etroit = ctx.resources.configuration.screenWidthDp < 560
+            val encre = LinearLayout(ctx).apply { gravity = android.view.Gravity.CENTER_VERTICAL }
+            encre.addView(Theme.texte(ctx, "Encre  ", Theme.TEXTE))
+            encre.addView(Theme.Segments(ctx, ENCRES.keys.toList(), "Bleue") { pad.encre = ENCRES.getValue(it) },
                 LinearLayout.LayoutParams(ctx.dp(200), -2))
+            val bas = if (etroit) LinearLayout(ctx).apply { gravity = android.view.Gravity.CENTER_VERTICAL }
+                .also { addView(encre, LinearLayout.LayoutParams(-1, -2).apply { topMargin = ctx.dp(16) }) } else encre
             bas.addView(View(ctx), LinearLayout.LayoutParams(0, 1, 1f))
             bas.addView(Theme.bouton(ctx, "Effacer", Theme.Style.DISCRET) { pad.effacer() })
             bas.addView(Theme.bouton(ctx, "Annuler") { d.dismiss() }, LinearLayout.LayoutParams(-2, -2).apply { marginStart = ctx.dp(8) })
@@ -126,9 +140,10 @@ object Signature {
                 if (bmp == null) {
                     android.widget.Toast.makeText(ctx, "Signez d'abord dans le cadre.", android.widget.Toast.LENGTH_SHORT).show()
                 } else {
-                    fichier(ctx).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                    val f = nouveau(ctx)
+                    f.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
                     d.dismiss()
-                    fin(fichier(ctx))
+                    fin(f)
                 }
             }, LinearLayout.LayoutParams(-2, -2).apply { marginStart = ctx.dp(8) })
             addView(bas, LinearLayout.LayoutParams(-1, -2).apply { topMargin = ctx.dp(16) })

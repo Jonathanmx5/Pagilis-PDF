@@ -65,6 +65,14 @@ class VuePage(ctx: Context) : View(ctx) {
         }
     var pageChangee: (Int) -> Unit = {}
 
+    /** Toucher simple sans outil actif (cases de formulaire), en coordonnées de page. */
+    var tape: ((Float, Float) -> Boolean)? = null
+
+    /** Rectangles à montrer sur la page : cases de formulaire (contour), mots trouvés (plein). */
+    data class Repere(val x0: Float, val y0: Float, val x1: Float, val y1: Float, val couleur: Int, val plein: Boolean)
+    var reperes: List<Repere> = emptyList()
+        set(v) { field = v; invalidate() }
+
     private var image: Bitmap? = null
     private var echelleImage = 1f
     private var zoom = 1f          // 1 = page entière à l'écran
@@ -133,6 +141,13 @@ class VuePage(ctx: Context) : View(ctx) {
         val zone = rectEcran(0f, 0f, largeurPage, hauteurPage)
         canvas.drawRect(zone.left + 4, zone.top + 6, zone.right + 4, zone.bottom + 6, peintureOmbre)
         canvas.drawBitmap(bmp, null, zone, peintureImage)
+        for (r in reperes) {
+            val e = rectEcran(r.x0, r.y0, r.x1, r.y1)
+            canvas.drawRect(e, Paint().apply {
+                color = r.couleur
+                if (r.plein) alpha = 90 else { style = Paint.Style.STROKE; strokeWidth = 2 * resources.displayMetrics.density; alpha = 170 }
+            })
+        }
         interaction?.dessiner(canvas, this)
     }
 
@@ -166,6 +181,11 @@ class VuePage(ctx: Context) : View(ctx) {
             val dx = e2.x - e1.x
             if (abs(dx) > width / 6f && abs(dx) > abs(e2.y - e1.y)) aller(if (dx < 0) index + 1 else index - 1)
             return true
+        }
+
+        override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+            val p = versPage(e.x, e.y)
+            return tape?.invoke(p[0], p[1]) ?: false
         }
 
         override fun onDoubleTap(e: MotionEvent): Boolean {

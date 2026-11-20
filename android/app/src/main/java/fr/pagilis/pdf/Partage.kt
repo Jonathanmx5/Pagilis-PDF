@@ -29,10 +29,20 @@ class Partage : ContentProvider() {
     }
 
     override fun onCreate() = true
-    override fun getType(uri: Uri) =
-        if (uri.lastPathSegment.orEmpty().endsWith(".apk")) "application/vnd.android.package-archive" else "application/pdf"
-    override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor =
-        ParcelFileDescriptor.open(fichier(uri), ParcelFileDescriptor.MODE_READ_ONLY)
+    override fun getType(uri: Uri) = uri.lastPathSegment.orEmpty().let {
+        when {
+            it.endsWith(".apk") -> "application/vnd.android.package-archive"
+            it.endsWith(".jpg") -> "image/jpeg"
+            else -> "application/pdf"
+        }
+    }
+    /** Lecture seule, sauf la photo du scanner, que l'appareil photo d'Android écrit. */
+    override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
+        val f = fichier(uri)
+        val ecriture = 'w' in mode
+        if (ecriture && !f.name.startsWith("scan_")) throw SecurityException("lecture seule")
+        return ParcelFileDescriptor.open(f, if (ecriture) ParcelFileDescriptor.parseMode(mode) else ParcelFileDescriptor.MODE_READ_ONLY)
+    }
 
     override fun query(uri: Uri, projection: Array<out String>?, s: String?, a: Array<out String>?, o: String?): Cursor {
         val f = fichier(uri)

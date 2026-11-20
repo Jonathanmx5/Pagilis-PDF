@@ -28,19 +28,21 @@ import fr.pagilis.pdf.Theme.dp
 import java.io.File
 import kotlin.math.max
 
-enum class Outil(val libelle: String, val symbole: String, val titre: String, val description: String,
+enum class Outil(val libelle: String, val court: String, val symbole: String, val titre: String, val description: String,
                  val exigeDocument: Boolean) {
-    LIRE("Lire", "📖", "Lire", "Faites glisser pour changer de page, pincez pour zoomer, touchez deux fois pour agrandir.", false),
-    SIGNER("Signer", "✒️", "Signer", "Posez votre signature (ou un tampon) sur la page.", true),
-    TEXTE("Texte", "Aa", "Ajouter du texte", "Une date, une mention, un champ de formulaire : touchez la page à l'endroit voulu.", true),
-    PAGES("Pages", "▦", "Pages", "Touchez les vignettes pour les choisir. Restez appuyé puis glissez pour changer l'ordre.", true),
-    FUSION("Fusionner", "⊕", "Fusionner", "Assembler plusieurs PDF dans l'ordre choisi.", false),
-    DECOUPE("Découper", "✂️", "Découper", "Séparer le PDF ouvert en plusieurs fichiers.", true);
+    LIRE("Lire", "Lire", "📖", "Lire", "Glissez pour changer de page, pincez pour zoomer. Touchez une case de formulaire pour la remplir.", false),
+    SIGNER("Signer", "Signer", "✒️", "Signer", "Posez votre signature (ou un tampon) sur la page.", true),
+    TEXTE("Texte", "Texte", "Aa", "Ajouter du texte", "Une date, une mention : touchez la page à l'endroit voulu.", true),
+    ANNOTER("Annoter", "Annoter", "🖍", "Annoter", "Surligner, dessiner, encadrer, laisser une note. Lisibles dans tous les lecteurs PDF.", true),
+    PAGES("Pages", "Pages", "▦", "Pages", "Touchez les vignettes pour les choisir. Restez appuyé puis glissez pour changer l'ordre.", true),
+    FUSION("Fusionner", "Fusion", "⊕", "Fusionner", "Assembler plusieurs PDF dans l'ordre choisi.", false),
+    DECOUPE("Découper", "Découpe", "✂️", "Découper", "Séparer le PDF ouvert en plusieurs fichiers.", true);
 
     fun creer(a: MainActivity): OutilPanneau = when (this) {
         LIRE -> OutilLire(a)
         SIGNER -> OutilSigner(a)
         TEXTE -> OutilTexte(a)
+        ANNOTER -> OutilAnnoter(a)
         PAGES -> OutilPages(a)
         FUSION -> OutilFusion(a)
         DECOUPE -> OutilDecoupe(a)
@@ -59,7 +61,7 @@ abstract class OutilPanneau(val a: MainActivity) {
     open fun resultat(code: Int, uris: List<Uri>) {}
 
     protected fun section(p: LinearLayout, titre: String) =
-        p.addView(Theme.titre(a, titre, 15f).apply { setPadding(0, a.dp(18), 0, a.dp(8)) })
+        p.addView(Theme.titre(a, titre, 15f).apply { setPadding(0, a.dp(if (a.tablette) 18 else 8), 0, a.dp(if (a.tablette) 8 else 6)) })
 
     protected fun ligne(p: LinearLayout, libelle: String, vue: View) {
         val l = LinearLayout(a).apply { gravity = Gravity.CENTER_VERTICAL }
@@ -104,6 +106,7 @@ class OutilSigner(a: MainActivity) : OutilPanneau(a), Interaction {
     private var image: File? = Signature.enregistree(a)
     private var ratio = image?.let { Signature.ratio(it) } ?: 0.4f
     private var libelle = if (image != null) "Ma signature" else null
+    private val miniatures = mutableMapOf<String, Bitmap?>()
     private var largeur = 160f            // points PDF
     private var opacite = 100
     private var centre: FloatArray? = null // centre de l'image sur la page (repère affiché)
@@ -111,19 +114,51 @@ class OutilSigner(a: MainActivity) : OutilPanneau(a), Interaction {
     private var apercu: Bitmap? = null
 
     override fun construire(p: LinearLayout) {
-        section(p, "Image")
+        val gardees = Signature.liste(a)
+        section(p, if (gardees.isEmpty()) "Image" else "Mes signatures et tampons")
+        if (gardees.isNotEmpty()) {
+            // Signature complète, initiales… : on touche pour choisir, on reste appuyé pour supprimer.
+            val rang = LinearLayout(a)
+            for (f in gardees) {
+                val img = ImageView(a).apply {
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    setPadding(a.dp(6), a.dp(4), a.dp(6), a.dp(4))
+                    background = android.graphics.drawable.LayerDrawable(arrayOf(Theme.damier(a),
+                        Theme.fond(android.graphics.Color.TRANSPARENT, a.dp(8f),
+                            if (f == image) Theme.ACCENT else Theme.BORDURE, a.dp(if (f == image) 3 else 1))))
+                    clipToOutline = true
+                    setImageBitmap(miniatures.getOrPut(f.path) { Signature.apercu(f) })
+                    contentDescription = "Signature"
+                    setOnClickListener { utiliser(f, "Ma signature") }
+                    setOnLongClickListener {
+                        AlertDialog.Builder(a).setMessage("Supprimer cette signature de l'appareil ?")
+                            .setPositiveButton("Supprimer") { _, _ ->
+                                f.delete(); miniatures.remove(f.path)
+                                if (image == f) { image = Signature.enregistree(a); libelle = if (image != null) "Ma signature" else null; apercu = null }
+                                a.rafraichirPanneau()
+                            }.setNegativeButton("Annuler", null).show()
+                        true
+                    }
+                }
+                rang.addView(img, LinearLayout.LayoutParams(a.dp(104), a.dp(52)).apply { marginEnd = a.dp(8) })
+            }
+            p.addView(android.widget.HorizontalScrollView(a).apply { isHorizontalScrollBarEnabled = false; addView(rang) },
+                LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = a.dp(8) })
+        }
         val l = LinearLayout(a)
-        l.addView(Theme.bouton(a, if (image != null && libelle == "Ma signature") "Refaire ma signature" else "Créer ma signature",
-            Theme.Style.SECONDAIRE) {
+        l.addView(Theme.bouton(a, if (gardees.isEmpty()) "Créer ma signature" else "＋ Nouvelle", Theme.Style.SECONDAIRE) {
             Signature.creer(a) { f -> utiliser(f, "Ma signature") }
         }, LinearLayout.LayoutParams(0, a.dp(48), 1f))
-        l.addView(Theme.bouton(a, "Image…", Theme.Style.SECONDAIRE) { a.choisirImage() },
+        l.addView(Theme.bouton(a, "Tampon / image…", Theme.Style.SECONDAIRE) { a.choisirImage() },
             LinearLayout.LayoutParams(-2, a.dp(48)).apply { marginStart = a.dp(8) })
         p.addView(l)
-        p.addView(Theme.texte(a, libelle ?: "Créez votre signature, ou choisissez une image (signature scannée, tampon…).",
-            if (libelle != null) Theme.TEXTE else Theme.TEXTE_2).apply { setPadding(0, a.dp(8), 0, 0) })
+        if (a.tablette || libelle == null)
+            p.addView(Theme.texte(a, libelle ?: "Créez votre signature, ou choisissez une image (signature scannée, tampon…).",
+                if (libelle != null) Theme.TEXTE else Theme.TEXTE_2).apply { setPadding(0, a.dp(8), 0, 0) })
         section(p, "Placement")
-        p.addView(Theme.texte(a, "Touchez la page pour poser l'image, puis faites-la glisser.").apply { setPadding(0, 0, 0, a.dp(8)) })
+        // Téléphone : le panneau reste court, la consigne est dans la ligne d'état.
+        if (a.tablette) p.addView(Theme.texte(a, "Touchez la page pour poser l'image, puis faites-la glisser.").apply { setPadding(0, 0, 0, a.dp(8)) })
+        else if (libelle != null) a.statut("$libelle : touchez la page pour la poser, puis faites-la glisser.")
         curseur(p, "Taille", 40, 400, largeur.toInt(), "") { largeur = it.toFloat(); a.vue.invalidate() }
         curseur(p, "Opacité", 10, 100, opacite, " %") { opacite = it; a.vue.invalidate() }
         action(p, "Poser la signature") { poser() }
@@ -139,10 +174,12 @@ class OutilSigner(a: MainActivity) : OutilPanneau(a), Interaction {
 
     override fun resultat(code: Int, uris: List<Uri>) {
         if (code != MainActivity.CHOISIR_IMAGE) return
-        val f = File(a.filesDir, "tampon_image")
+        // Tampon, signature scannée : gardé avec les signatures, transparence du PNG comprise.
+        val f = Signature.nouveau(a)
         a.contentResolver.openInputStream(uris[0])?.use { e -> f.outputStream().use { e.copyTo(it) } }
-        if (BitmapFactory.decodeFile(f.path) == null) return a.erreur(ErreurPdf("Image illisible."))
+        if (BitmapFactory.decodeFile(f.path) == null) { f.delete(); return a.erreur(ErreurPdf("Image illisible.")) }
         utiliser(f, a.nomDe(uris[0]))
+        a.statut("Image gardée dans « Mes signatures et tampons ». Touchez la page pour la poser.")
     }
 
     override fun interaction() = this
@@ -203,9 +240,28 @@ class OutilTexte(a: MainActivity) : OutilPanneau(a), Interaction {
         section(p, "Style")
         ligne(p, "Taille", Theme.Segments(a, listOf("10", "12", "14", "18"), taille) { taille = it })
         ligne(p, "Couleur", Theme.Segments(a, couleurs.keys.toList(), couleur) { couleur = it })
-        p.addView(Theme.texte(a, "Touchez la page à l'endroit du texte, tapez, puis Ajouter.").apply { setPadding(0, a.dp(8), 0, 0) })
+        if (a.tablette) p.addView(Theme.texte(a, "Touchez la page à l'endroit du texte, tapez, puis Ajouter.").apply { setPadding(0, a.dp(8), 0, 0) })
+        section(p, "Mentions en un geste")
+        val aujourdhui = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.FRANCE).format(java.util.Date())
+        val mentions = listOf("Lu et approuvé", "Bon pour accord", "Le $aujourdhui", "Lu et approuvé, le $aujourdhui")
+        val grille = GridLayout(a).apply { columnCount = 2 }
+        for (m in mentions) {
+            grille.addView(Theme.bouton(a, m, if (m == rapide) Theme.Style.PRINCIPAL else Theme.Style.SECONDAIRE) {
+                rapide = if (rapide == m) null else m
+                a.rafraichirPanneau()
+                if (rapide != null) a.statut("« $m » : touchez la page à l'endroit voulu.")
+            }.apply { textSize = 13f; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END; setPadding(a.dp(8), 0, a.dp(8), 0) },
+                GridLayout.LayoutParams(GridLayout.spec(GridLayout.UNDEFINED), GridLayout.spec(GridLayout.UNDEFINED, 1f)).apply {
+                    width = 0; height = a.dp(44); setMargins(0, 0, a.dp(6), a.dp(6))
+                })
+        }
+        p.addView(grille, LinearLayout.LayoutParams(-1, -2))
     }
 
+    /** Mention choisie : posée telle quelle au prochain toucher, sans clavier. */
+    private var rapide: String? = null
+
+    override fun quitter() { rapide = null }
     override fun interaction() = this
     override fun appui(x: Float, y: Float) { marque = floatArrayOf(x, y) }
     override fun dessiner(canvas: Canvas, vue: VuePage) {
@@ -216,6 +272,16 @@ class OutilTexte(a: MainActivity) : OutilPanneau(a), Interaction {
 
     override fun relache(x: Float, y: Float) {
         val i = a.vue.index
+        rapide?.let { m ->
+            val taillePt = taille.toFloat()
+            val rvb = couleurs.getValue(couleur)
+            a.retoucher("Ajout de la mention…", { it.ajouterTexte(i, x, y, m, taillePt, rvb) }) {
+                marque = null; rapide = null
+                a.rafraichirPanneau()
+                a.statut("« $m » ajouté. Annuler pour revenir en arrière.")
+            }
+            return
+        }
         val champ = EditText(a).apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES; hint = "Texte à ajouter" }
         val d = AlertDialog.Builder(a).setTitle("Ajouter du texte").setView(champ)
             .setPositiveButton("Ajouter") { _, _ ->
@@ -232,6 +298,92 @@ class OutilTexte(a: MainActivity) : OutilPanneau(a), Interaction {
         d.setOnShowListener { champ.requestFocus() }
         d.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
         d.show()
+    }
+}
+
+// ----------------------------------------------------------------- Annoter
+
+class OutilAnnoter(a: MainActivity) : OutilPanneau(a), Interaction {
+    private val couleurs = linkedMapOf(
+        "Jaune" to floatArrayOf(1f, 0.85f, 0f), "Vert" to floatArrayOf(0.3f, 0.85f, 0.3f),
+        "Rouge" to floatArrayOf(0.85f, 0.1f, 0.1f), "Bleu" to floatArrayOf(0.1f, 0.3f, 0.85f))
+    private val modes = listOf("Surligner", "Stylo", "Cadre", "Note", "Gomme")
+    private var mode = "Surligner"
+    private var couleur = "Jaune"
+    private var trait = mutableListOf<FloatArray>()
+
+    override fun construire(p: LinearLayout) {
+        p.addView(Theme.Segments(a, modes, mode) { mode = it; trait.clear(); a.statut(aide()) }.apply {
+            for (k in 0 until childCount) (getChildAt(k) as TextView).apply { textSize = 13f; setPadding(a.dp(2), a.dp(10), a.dp(2), a.dp(10)) }
+        }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = a.dp(8) })
+        ligne(p, "Couleur", Theme.Segments(a, couleurs.keys.toList(), couleur) { couleur = it }.apply {
+            for (k in 0 until childCount) (getChildAt(k) as TextView).apply { textSize = 13f; setPadding(a.dp(2), a.dp(10), a.dp(2), a.dp(10)) }
+        })
+        if (a.tablette) p.addView(Theme.texte(a, aide()))
+    }
+
+    private fun aide() = when (mode) {
+        "Surligner" -> "Glissez le doigt sur le texte à surligner."
+        "Stylo" -> "Dessinez sur la page."
+        "Cadre" -> "Glissez pour tracer un rectangle."
+        "Note" -> "Touchez la page à l'endroit de la note."
+        else -> "Touchez une annotation pour l'effacer."
+    }
+
+    override fun montre() { a.statut(aide()) }
+    override fun interaction() = this
+    override fun pageChangee() { trait.clear() }
+
+    override fun appui(x: Float, y: Float) { trait = mutableListOf(floatArrayOf(x, y)) }
+    override fun glisse(x: Float, y: Float) { if (mode != "Note" && mode != "Gomme") trait += floatArrayOf(x, y) }
+
+    override fun relache(x: Float, y: Float) {
+        val i = a.vue.index
+        val rvb = couleurs.getValue(couleur)
+        val t = trait.toList()
+        trait.clear()
+        if (t.isEmpty()) return
+        val d = t.first(); val f = t.last()
+        when (mode) {
+            "Surligner" -> a.retoucher("Surlignage…", { it.surligner(i, d[0], d[1], f[0], f[1], rvb) }) { ok ->
+                a.statut(if (ok) "Texte surligné." else "Pas de texte ici : glissez sur des mots (un scan n'a pas de texte).")
+            }
+            "Stylo" -> a.retoucher("Dessin…", { it.dessiner(i, listOf(t), rvb, 2f) }) {}
+            "Cadre" -> a.retoucher("Cadre…", {
+                it.encadrer(i, com.artifex.mupdf.fitz.Rect(minOf(d[0], f[0]), minOf(d[1], f[1]), maxOf(d[0], f[0]), maxOf(d[1], f[1])), rvb)
+            }) {}
+            "Note" -> {
+                val champ = EditText(a).apply { hint = "Votre note"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES }
+                val dlg = AlertDialog.Builder(a).setTitle("Note").setView(champ)
+                    .setPositiveButton("Ajouter") { _, _ ->
+                        val texte = champ.text.toString()
+                        a.retoucher("Note…", { it.noter(i, f[0], f[1], texte) }) { ok -> if (ok) a.statut("Note ajoutée.") }
+                    }.setNegativeButton("Annuler", null).create()
+                dlg.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+                dlg.show()
+            }
+            "Gomme" -> a.retoucher("Effacement…", { it.effacerAnnotation(i, f[0], f[1]) }) { ok ->
+                a.statut(if (ok) "Annotation effacée." else "Aucune annotation à cet endroit.")
+            }
+        }
+    }
+
+    override fun dessiner(canvas: Canvas, vue: VuePage) {
+        if (trait.size < 2) return
+        val c = couleurs.getValue(couleur)
+        val peinture = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.rgb((c[0] * 255).toInt(), (c[1] * 255).toInt(), (c[2] * 255).toInt())
+            style = Paint.Style.STROKE; strokeWidth = a.dp(2f); strokeJoin = Paint.Join.ROUND; strokeCap = Paint.Cap.ROUND
+        }
+        val d = vue.versEcran(trait.first()[0], trait.first()[1]); val f = vue.versEcran(trait.last()[0], trait.last()[1])
+        when (mode) {
+            "Stylo" -> canvas.drawPath(android.graphics.Path().apply {
+                moveTo(d[0], d[1]); for (pt in trait.drop(1)) { val e = vue.versEcran(pt[0], pt[1]); lineTo(e[0], e[1]) }
+            }, peinture)
+            "Cadre" -> canvas.drawRect(minOf(d[0], f[0]), minOf(d[1], f[1]), maxOf(d[0], f[0]), maxOf(d[1], f[1]), peinture)
+            "Surligner" -> canvas.drawRect(minOf(d[0], f[0]), minOf(d[1], f[1]) - a.dp(6f), maxOf(d[0], f[0]), maxOf(d[1], f[1]) + a.dp(6f),
+                Paint().apply { color = peinture.color; alpha = 80 })
+        }
     }
 }
 
@@ -255,7 +407,7 @@ class OutilPages(a: MainActivity) : OutilPanneau(a) {
         l2.addView(Theme.bouton(a, "Extraire…") { extraire() }, LinearLayout.LayoutParams(0, a.dp(48), 1f))
         p.addView(l2, LinearLayout.LayoutParams(-1, -2).apply { topMargin = a.dp(6) })
         section(p, "Toutes les pages")
-        val g = GridLayout(a).apply { columnCount = 2 }
+        val g = GridLayout(a).apply { columnCount = if (a.tablette) 2 else 3 }
         grille = g
         p.addView(g)
         remplir()
@@ -269,7 +421,9 @@ class OutilPages(a: MainActivity) : OutilPanneau(a) {
         val c = a.copie ?: return
         g.removeAllViews()
         selection.retainAll((0 until c.nombrePages).toSet())
-        val largeur = a.dp(140)
+        // Téléphone : trois vignettes par ligne, à la largeur de l'écran (marges du panneau déduites).
+        val largeur = if (a.tablette) a.dp(140)
+            else a.dp(minOf(140, (a.resources.configuration.screenWidthDp - 40) / 3 - 12))
         for (i in 0 until c.nombrePages) {
             val cellule = LinearLayout(a).apply {
                 orientation = LinearLayout.VERTICAL

@@ -39,6 +39,20 @@ object Theme {
         if (bordure != null) setStroke(epaisseur, bordure)
     }
 
+    /** Damier clair, comme dans les logiciels d'image : là où il se voit, l'image est transparente. */
+    fun damier(ctx: Context): android.graphics.drawable.Drawable {
+        val c = ctx.dp(6)
+        val bmp = android.graphics.Bitmap.createBitmap(2 * c, 2 * c, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bmp)
+        canvas.drawColor(Color.WHITE)
+        val gris = android.graphics.Paint().apply { color = Color.rgb(222, 224, 228) }
+        canvas.drawRect(0f, 0f, c.toFloat(), c.toFloat(), gris)
+        canvas.drawRect(c.toFloat(), c.toFloat(), 2f * c, 2f * c, gris)
+        return android.graphics.drawable.BitmapDrawable(ctx.resources, bmp).apply {
+            setTileModeXY(android.graphics.Shader.TileMode.REPEAT, android.graphics.Shader.TileMode.REPEAT)
+        }
+    }
+
     enum class Style { PRINCIPAL, SECONDAIRE, DISCRET, DANGER }
 
     fun bouton(ctx: Context, texte: String, style: Style = Style.SECONDAIRE, action: () -> Unit): Button =
