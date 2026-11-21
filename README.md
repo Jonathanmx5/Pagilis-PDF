@@ -5,13 +5,13 @@
 <h1 align="center">Pagilis PDF</h1>
 
 <p align="center">
-  <strong>Corrigez, organisez et signez vos PDF en quelques clics.<br>
-  Gratuit, sans compte, sans abonnement. Vos fichiers restent sur votre PC.</strong>
+  <strong>Signez, corrigez et organisez vos PDF sur PC Windows et sur tablette ou téléphone Android.</strong><br>
+  Gratuit, sans compte et sans abonnement. Vos documents ne quittent jamais votre appareil.
 </p>
 
 <p align="center">
-  <a href="https://github.com/Jonathanmx5/Pagilis-PDF/releases/latest"><img alt="Télécharger" src="https://img.shields.io/github/v/release/Jonathanmx5/Pagilis-PDF?label=T%C3%A9l%C3%A9charger&style=for-the-badge&color=1F6AA5"></a>
-  <img alt="Windows 10 et 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=for-the-badge">
+  <a href="https://github.com/Jonathanmx5/Pagilis-PDF/releases/latest"><img alt="Télécharger pour Windows" src="https://img.shields.io/github/v/release/Jonathanmx5/Pagilis-PDF?label=Windows&logo=windows&style=for-the-badge&color=1F6AA5"></a>
+  <a href="https://github.com/Jonathanmx5/Pagilis-PDF/releases?q=android&expanded=true"><img alt="Télécharger pour Android" src="https://img.shields.io/github/v/release/Jonathanmx5/Pagilis-PDF?filter=android-v*&label=Android&logo=android&style=for-the-badge&color=3DDC84"></a>
   <img alt="Licence AGPL-3.0" src="https://img.shields.io/badge/licence-AGPL--3.0-555?style=for-the-badge">
 </p>
 
@@ -21,111 +21,136 @@
 
 ---
 
-## Pourquoi Pagilis PDF ?
+## En 10 secondes
 
-- **Corriger un PDF comme un document.** Une faute dans un PDF ? Cliquez sur la
-  ligne, tapez, Entrée. La police d'origine est conservée.
-- **Ouvrir aussi les documents Word.** Corrigez-les dans le même écran et
-  récupérez un PDF propre.
-- **Tout est local.** Aucun envoi sur internet et aucun compte à créer. Vos
-  contrats, factures et pièces d'identité ne quittent pas votre ordinateur.
-- **Prêt en une seconde.** Un seul fichier `Pagilis.exe` suffit, sans
-  installation ni droits administrateur. Il fonctionne aussi depuis une clé USB.
-- **Toujours à jour.** Chaque nouvelle version est proposée au démarrage. Elle
-  est vérifiée avant de remplacer l'ancienne, et l'ancienne est gardée de côté.
+Un devis à signer, une faute dans un contrat ou un scan à envoyer : **Pagilis PDF le fait sans
+détour.** Vous ouvrez le document, vous faites la retouche, vous enregistrez. Vous n'avez ni compte
+à créer, ni abonnement à payer, ni fichier à envoyer sur un serveur inconnu.
 
-## Ce que vous pouvez faire
+- 🔒 **100 % local.** Vos contrats, factures et pièces d'identité restent sur votre PC ou votre tablette.
+- 💸 **Gratuit pour toujours.** C'est un logiciel libre, sans publicité ni version « Pro » cachée.
+- ⚡ **Prêt tout de suite.** Sur PC, un seul fichier à lancer, sans installation. Sur Android, une application légère.
+- 🔄 **Toujours à jour.** Chaque nouvelle version est proposée dans l'application et s'installe en un toucher.
+- ↩️ **Sans risque.** Chaque retouche s'annule, et l'original reste intact tant que vous n'enregistrez pas.
 
-| | Fonction | En pratique |
-|---|---|---|
-| ✏️ | **Modifier le texte** | Corriger une ligne d'un clic, déplacer un bloc d'un glisser, ajouter du texte n'importe où (date, mention, formulaire), rechercher et remplacer dans tout le document. |
-| 📄 | **Pages** | Vignettes de toutes les pages : glissez-les pour changer l'ordre, pivotez, supprimez, insérez un autre PDF ou extrayez une sélection. |
-| 🖋️ | **Signer** | Créez votre signature (tracée à la main ou écrite dans une police manuscrite), puis posez-la à la souris. Une image (tampon, signature scannée) marche aussi. |
-| 🔗 | **Fusionner** | Réunir plusieurs PDF en un seul, dans l'ordre choisi. |
-| ✂️ | **Découper** | Une page par fichier, toutes les N pages, ou selon vos plages (1-3, 5, 8-). |
-| 🔍 | **Reconnaître le texte (OCR)** | Rendre un scan cherchable et copiable, en français, anglais, allemand, espagnol ou italien. |
-
-Les 20 dernières retouches se défont avec **Ctrl+Z**, et **Ctrl+S** enregistre.
-Une pastille vous signale ce qui n'est pas encore sauvegardé.
-
-## En images
+## Téléchargez
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/pages.png" alt="Gestion des pages en vignettes"><br>
-      <sub><b>Pages</b> : sélectionnez, pivotez, réordonnez, extrayez.</sub></td>
-    <td width="50%"><img src="docs/images/signer.png" alt="Signature posée sur un devis"><br>
-      <sub><b>Signer</b> : créez votre signature une fois, posez-la à la souris.</sub></td>
+    <th width="50%">💻 PC Windows 10 et 11</th>
+    <th width="50%">📱 Tablette et téléphone Android 8 ou plus récent</th>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/accueil.png" alt="Écran d'accueil"><br>
-      <sub><b>Accueil</b> : ouvrez un PDF ou un Word, ou reprenez un fichier récent.</sub></td>
-    <td width="50%"><img src="docs/images/modifier.png" alt="Correction d'une ligne"><br>
-      <sub><b>Modifier</b> : cliquez sur une ligne, tapez, Entrée.</sub></td>
+    <td>
+      <a href="https://github.com/Jonathanmx5/Pagilis-PDF/releases/latest"><b>⬇ Télécharger Pagilis.exe</b></a><br><br>
+      Lancez-le, c'est tout. Pour une installation durable, cliquez sur <i>Installer sur ce PC</i> dans
+      l'application : aucun droit administrateur n'est demandé.
+    </td>
+    <td>
+      <a href="https://github.com/Jonathanmx5/Pagilis-PDF/releases?q=android&expanded=true"><b>⬇ Télécharger PagilisPDF.apk</b></a>
+      (version <code>android-v…</code> la plus récente)<br><br>
+      Ouvrez le fichier sur l'appareil. Android vous demande une fois d'autoriser l'installation,
+      puis les mises à jour arrivent d'elles-mêmes.
+    </td>
   </tr>
 </table>
 
-## Installer
+## Ce que vous pouvez faire
 
-1. Téléchargez `Pagilis.exe` depuis la
-   **[dernière version](https://github.com/Jonathanmx5/Pagilis-PDF/releases/latest)**.
-2. Lancez-le. C'est tout.
+| | Fonction | 💻 PC | 📱 Android |
+|---|---|:---:|:---:|
+| 🖋️ | **Signer** : signature tracée à la main (trait de stylo plume), ou tampon PNG transparent | ✅ | ✅ |
+| ✍️ | **Plusieurs signatures gardées** (signature complète, initiales, tampon), créées même sans PDF ouvert | | ✅ |
+| ▭ | **Cases de signature** : préparez « Signer ici : Client », remplissez la vôtre d'un toucher | | ✅ |
+| ✏️ | **Corriger le texte existant** : cliquez sur la ligne, tapez, la police d'origine est gardée | ✅ | |
+| 🔤 | **Ajouter du texte** : date, « Lu et approuvé », mention en un geste | ✅ | ✅ |
+| 📋 | **Remplir les formulaires PDF** : champs, cases à cocher, listes | | ✅ |
+| 🖍️ | **Annoter** : surligner, stylo, cadre, note | | ✅ |
+| 📄 | **Pages** : réordonner en glissant, pivoter, supprimer, insérer, extraire | ✅ | ✅ |
+| 🔗 | **Fusionner** plusieurs PDF, et ✂️ **Découper** un PDF en plusieurs | ✅ | ✅ |
+| 📷 | **Scanner** un document avec l'appareil photo : recadré et blanchi | | ✅ |
+| 🔍 | **Rechercher** dans le document | ✅ | ✅ |
+| 🔠 | **Reconnaître le texte d'un scan (OCR)** en 5 langues | ✅ | |
+| 📝 | **Ouvrir un document Word** et le corriger | ✅ | |
+| 📧 | **Copie allégée** pour l'envoyer par e-mail | | ✅ |
+| 🔐 | **Copie protégée par mot de passe** (AES-256) ou **verrouillée** une fois signée | | ✅ |
+| 🛟 | **Copies de secours** automatiques avant chaque remplacement | | ✅ |
 
-Pour l'installer durablement, cliquez sur **Installer sur ce PC** en bas de la
-barre latérale. L'installation ne demande aucun droit administrateur. Elle crée
-les raccourcis du menu Démarrer et du Bureau, et ajoute Pagilis PDF dans
-« Ouvrir avec » pour vos PDF. Vous pouvez la retirer depuis *Paramètres >
-Applications installées*.
+## En images
 
-> Le fichier n'étant pas signé numériquement, Windows SmartScreen peut afficher
-> un avertissement au premier lancement : cliquez sur *Informations
-> complémentaires*, puis sur *Exécuter quand même*.
+### 💻 Sur PC Windows
 
-## Sur tablette et téléphone Android
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/signer.png" alt="Signature posée sur un devis"><br>
+      <sub><b>Signer</b> : créez votre signature une fois, posez-la à la souris.</sub></td>
+    <td width="50%"><img src="docs/images/pages.png" alt="Gestion des pages en vignettes"><br>
+      <sub><b>Pages</b> : sélectionnez, pivotez, réordonnez, extrayez.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/modifier.png" alt="Correction d'une ligne"><br>
+      <sub><b>Corriger</b> : cliquez sur une ligne, tapez, Entrée.</sub></td>
+    <td width="50%"><img src="docs/images/accueil.png" alt="Écran d'accueil"><br>
+      <sub><b>Accueil</b> : ouvrez un PDF ou un Word, ou reprenez un fichier récent.</sub></td>
+  </tr>
+</table>
 
-Pagilis PDF existe aussi pour Android (tablette et téléphone, Android 8 ou plus récent).
-Il repose sur le même moteur PDF (MuPDF) et propose :
+### 📱 Sur tablette et téléphone Android
 
-- **Signer** : créez votre signature au doigt ou au stylet, avec un trait de stylo plume, puis posez-la à l'endroit voulu.
-- **Ajouter du texte** : une date, une mention ou un champ de formulaire, en noir ou en bleu.
-- **Pages** : pivoter, supprimer, insérer, extraire, ou réordonner en glissant les vignettes.
-- **Fusionner** et **Découper**.
-- **Enregistrer** (en remplaçant l'original ou en créant une copie) et **Partager** (mail, messagerie…).
-- **Ouvrir avec Pagilis PDF** depuis l'application Fichiers, Gmail, etc.
+<table>
+  <tr>
+    <td width="33%"><img src="docs/images/android-signer.png" alt="Devis signé sur téléphone"><br>
+      <sub><b>Signer</b> : touchez la page, la signature se pose. Faites-la glisser pour l'ajuster.</sub></td>
+    <td width="33%"><img src="docs/images/android-signatures.png" alt="Mes signatures"><br>
+      <sub><b>Mes signatures</b> : dessinées au doigt ou importées, prêtes pour tous vos PDF.</sub></td>
+    <td width="33%"><img src="docs/images/android-accueil.png" alt="Accueil Android"><br>
+      <sub><b>Accueil</b> : ouvrir, scanner, gérer ses signatures, reprendre un récent.</sub></td>
+  </tr>
+</table>
 
-Pour l'installer, téléchargez `PagilisPDF.apk` dans les versions `android-v…` des
-[Releases](https://github.com/Jonathanmx5/Pagilis-PDF/releases), puis ouvrez-le sur l'appareil.
-Android demandera d'autoriser l'installation depuis cette source.
+Sur tablette et en mode paysage, les outils passent sur le côté pour laisser toute la place au document.
 
-La version Android ne sait pas encore faire trois choses de la version PC : corriger une
-ligne de texte existante, ouvrir un document Word et reconnaître le texte d'un scan (OCR).
+## Questions fréquentes
+
+**Est-ce vraiment gratuit ?** Oui. Pagilis PDF est un logiciel libre (licence AGPL-3.0). Il n'y a
+ni publicité, ni abonnement, ni fonction payante.
+
+**Mes documents sont-ils envoyés quelque part ?** Non. Tout se fait sur votre appareil. La seule
+connexion sert à vérifier s'il existe une nouvelle version de Pagilis PDF.
+
+**Windows affiche un avertissement au premier lancement.** Le fichier n'est pas signé
+numériquement, alors SmartScreen se méfie. Cliquez sur *Informations complémentaires*, puis sur
+*Exécuter quand même*.
+
+**Android parle de « source inconnue ».** L'application est distribuée ici, sur GitHub, et non sur
+le Play Store. Autorisez l'installation une fois. Les mises à jour sont signées avec la même clé, et
+Android refuserait une version falsifiée.
+
+**Une signature dessinée a-t-elle une valeur légale ?** Elle vaut une signature manuscrite
+scannée : c'est suffisant pour un devis ou un bon pour accord. Ce n'est pas une signature
+électronique certifiée. Pour éviter les retouches après coup sur Android, enregistrez une *copie
+verrouillée*.
 
 ## Bon à savoir
 
-- **Polices.** Le texte corrigé reprend la police d'origine quand le PDF
-  l'embarque avec tous les caractères nécessaires, ou quand elle est installée
-  sur le PC. Sinon, il est réécrit en Arial, Times New Roman ou Courier New,
-  selon le style d'origine.
-- **Une seule mise en forme par ligne corrigée.** Une ligne corrigée prend un
-  seul style : celui de son morceau le plus long.
-- **Recherche.** La recherche ne trouve pas une expression coupée entre deux
-  lignes.
-- **Scans.** Une page scannée doit d'abord passer à l'OCR pour devenir
-  modifiable. Les pages à l'envers ou penchées ne sont pas encore redressées
-  automatiquement.
-- **Fichiers Word.** Leur ouverture nécessite Microsoft Word ou LibreOffice.
-  Un document protégé par mot de passe ne s'ouvre pas. Le résultat est
-  enregistré en PDF.
-- **PDF protégés.** Un PDF protégé par mot de passe est enregistré sans mot de
-  passe.
-- **En cas de souci,** le journal se trouve dans `%LOCALAPPDATA%\Pagilis\pagilis.log`.
+- **Polices (PC).** Le texte corrigé reprend la police d'origine quand le PDF l'embarque, ou quand
+  elle est installée sur le PC. Sinon, il est réécrit en Arial, Times New Roman ou Courier New.
+- **Une ligne corrigée (PC) prend un seul style**, celui de son morceau le plus long.
+- **Recherche.** Une expression coupée entre deux lignes n'est pas trouvée.
+- **Scans.** Sur PC, une page scannée doit passer par l'OCR pour devenir modifiable. Sur Android,
+  un scan reste une image, sans texte à rechercher.
+- **Fichiers Word (PC).** Leur ouverture nécessite Microsoft Word ou LibreOffice.
+- **PDF protégés.** Sur PC, un PDF protégé par mot de passe est enregistré sans mot de passe.
+- **En cas de souci sur PC,** le journal se trouve dans `%LOCALAPPDATA%\Pagilis\pagilis.log`.
 
-Anciennement **PDF Studio** : les installations existantes passent
-automatiquement à Pagilis PDF, préférences comprises.
+Anciennement **PDF Studio** : les installations existantes passent automatiquement à
+Pagilis PDF, préférences comprises.
 
 ---
 
 ## Pour les développeurs
+
+### PC Windows
 
 Application Python, avec une interface CustomTkinter, le moteur PDF
 [PyMuPDF](https://pymupdf.readthedocs.io) et l'OCR Tesseract.
@@ -148,17 +173,15 @@ python pagilis.py
 | `updater.py`, `installation.py` | Mises à jour sécurisées ; installation sans droits administrateur. |
 | `outils/dessiner_logo.py` | Génère `ressources/logo.png` et `pagilis.ico`. |
 
-La suite comprend plus de 220 tests. La CI exige au moins 80 % de couverture.
-Les versions des dépendances sont figées dans `requirements*.txt`.
+La suite comprend plus de 220 tests, et la CI exige au moins 80 % de couverture. Les versions des
+dépendances sont figées dans `requirements*.txt`.
 
-**Compiler** : `build_exe.bat` analyse le code, lance les tests et produit
-`dist\Pagilis.exe`.
+**Compiler** : `build_exe.bat` analyse le code, lance les tests et produit `dist\Pagilis.exe`.
 
 **Publier** :
 
-1. Écrivez les notes de la version dans `CHANGELOG.md`, sous `## [X.Y.Z]`.
-   Elles s'affichent dans la fenêtre de mise à jour, et la CI refuse une
-   version sans notes.
+1. Écrivez les notes de la version dans `CHANGELOG.md`, sous `## [X.Y.Z]`. Elles s'affichent dans
+   la fenêtre de mise à jour, et la CI refuse une version sans notes.
 2. Poussez le tag :
 
    ```bat
@@ -166,13 +189,20 @@ Les versions des dépendances sont figées dans `requirements*.txt`.
    git push origin vX.Y.Z
    ```
 
-   La CI lance les tests, construit l'exe, vérifie l'exe, puis publie
-   `version.json` et la release.
+   La CI lance les tests, construit l'exe, le vérifie, puis publie `version.json` et la release.
 
-Un tag `-beta.N` publie une pré-version que l'application ne propose jamais
-d'elle-même.
+Un tag `-beta.N` publie une pré-version que l'application ne propose jamais d'elle-même.
 
-**Android** : le projet est dans `android/` (Kotlin et MuPDF, sans autre bibliothèque).
+**Sûreté des mises à jour** :
+
+- L'empreinte SHA-256 est vérifiée après le téléchargement.
+- La nouvelle version doit réussir `Pagilis.exe --verifier` avant de remplacer l'ancienne.
+- La version précédente est sauvegardée dans `%LOCALAPPDATA%\Pagilis\version-precedente`.
+- Si le remplacement échoue, l'ancienne version est restaurée.
+
+### Android
+
+Le projet est dans `android/` : Kotlin et [MuPDF](https://mupdf.com), sans autre bibliothèque.
 
 ```bat
 cd android
@@ -182,29 +212,19 @@ gradlew assembleDebug
 ```
 
 Les versions publiées sont signées avec la clé `android/pagilis-release.jks` (décrite par
-`android/key.properties`), gardée sur le PC du mainteneur et jamais commitée. Sans elle,
-une nouvelle version ne peut pas s'installer par-dessus l'ancienne : sauvegardez ces deux
-fichiers. Pour publier, depuis `android/` :
+`android/key.properties`). Cette clé est gardée sur le PC du mainteneur et n'est jamais commitée.
+Sans elle, une nouvelle version ne peut pas s'installer par-dessus l'ancienne : sauvegardez ces
+deux fichiers. Pour publier, depuis `android/` :
 
 ```bat
 gradlew assembleRelease -PversionPagilis=X.Y.Z
 gh release create android-vX.Y.Z app/build/outputs/apk/release/app-release.apk#PagilisPDF.apk --latest=false
-eleasepp-release.apk#PagilisPDF.apk --latest=false
 ```
 
 Si les secrets `ANDROID_KEYSTORE_B64` et `ANDROID_KEYSTORE_PASSWORD` sont ajoutés au dépôt,
 pousser un tag `android-vX.Y.Z` suffit : la CI signe et publie.
 
-**Sûreté des mises à jour** :
-
-- L'empreinte SHA-256 est vérifiée après le téléchargement.
-- La nouvelle version doit réussir `Pagilis.exe --verifier` avant de remplacer
-  l'ancienne.
-- La version précédente est sauvegardée dans
-  `%LOCALAPPDATA%\Pagilis\version-precedente`.
-- Si le remplacement échoue, l'ancienne version est restaurée.
-
 ## Licence
 
-Pagilis PDF est un logiciel libre, distribué sous licence [GNU AGPL-3.0](LICENSE),
-comme PyMuPDF.
+Pagilis PDF est un logiciel libre, distribué sous licence [GNU AGPL-3.0](LICENSE), comme PyMuPDF
+et MuPDF.
