@@ -40,6 +40,7 @@ class MainActivity : Activity() {
         const val INSERER_PDF = 7     // pages
         const val PHOTO = 8           // scanner : appareil photo
         const val IMAGES_SCAN = 9     // scanner : images de la galerie
+        const val IMPORTER_SIGNATURE = 10 // « Mes signatures » : tampon ou signature scannée
     }
 
     private val scanner by lazy { Scanner(this) }
@@ -404,6 +405,7 @@ class MainActivity : Activity() {
         m.menu.add(0, 3, 2, "Scanner un document")
         m.menu.add(0, 4, 3, "Rechercher dans le PDF").isEnabled = copie != null && !occupe
         m.menu.add(0, 5, 4, "Copies de secours").isEnabled = !occupe
+        m.menu.add(0, 6, 5, "Mes signatures")
         m.setOnMenuItemClickListener {
             when (it.itemId) {
                 1 -> confirmerAbandon { choisirFichier() }
@@ -411,6 +413,7 @@ class MainActivity : Activity() {
                 3 -> confirmerAbandon { scanner.commencer() }
                 4 -> rechercher()
                 5 -> copiesDeSecours()
+                6 -> mesSignatures()
             }
             true
         }
@@ -543,6 +546,8 @@ class MainActivity : Activity() {
         accueil.addView(Theme.bouton(this, "Ouvrir un PDF", Theme.Style.PRINCIPAL) { choisirFichier() },
             LinearLayout.LayoutParams(large(240), dp(52)).apply { topMargin = dp(22) })
         accueil.addView(Theme.bouton(this, "📷  Scanner un document", Theme.Style.SECONDAIRE) { scanner.commencer() },
+            LinearLayout.LayoutParams(large(240), dp(52)).apply { topMargin = dp(10) })
+        accueil.addView(Theme.bouton(this, "✒️  Mes signatures", Theme.Style.SECONDAIRE) { mesSignatures() },
             LinearLayout.LayoutParams(large(240), dp(52)).apply { topMargin = dp(10) })
         val recents = Recents.liste(this)
         if (recents.isNotEmpty()) {
@@ -690,6 +695,66 @@ class MainActivity : Activity() {
             type = "application/pdf"
             if (plusieurs) putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
         }, code)
+    }
+
+    /**
+     * « Mes signatures », sans document ouvert : créer une signature, importer un tampon
+     * ou une signature scannée, supprimer (toucher une miniature).
+     */
+    fun mesSignatures() {
+        val gardees = Signature.liste(this)
+        var dlg: AlertDialog? = null
+        val corps = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(4), dp(20), 0) }
+        corps.addView(Theme.texte(this, if (gardees.isEmpty())
+            "Aucune signature pour l'instant. Dessinez-la au doigt, ou importez une image (signature scannée, tampon PNG transparent)."
+        else "Gardées sur cet appareil, prêtes à poser dans n'importe quel PDF. Touchez-en une pour la supprimer."))
+        val grille = android.widget.GridLayout(this).apply { columnCount = 2 }
+        for (f in gardees.reversed()) {
+            grille.addView(ImageView(this).apply {
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                setPadding(dp(6), dp(4), dp(6), dp(4))
+                background = android.graphics.drawable.LayerDrawable(arrayOf(Theme.damier(this@MainActivity),
+                    Theme.fond(Color.TRANSPARENT, dp(8f), Theme.BORDURE, dp(1))))
+                clipToOutline = true
+                setImageBitmap(Signature.apercu(f))
+                contentDescription = "Signature"
+                setOnClickListener {
+                    AlertDialog.Builder(this@MainActivity).setMessage("Supprimer cette signature de l'appareil ?")
+                        .setPositiveButton("Supprimer") { _, _ -> f.delete(); dlg?.dismiss(); signaturesChangees(); mesSignatures() }
+                        .setNegativeButton("Annuler", null).show()
+                }
+            }, android.widget.GridLayout.LayoutParams(android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED),
+                android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f)).apply {
+                width = 0; height = dp(64); setMargins(dp(4), dp(10), dp(4), 0)
+            })
+        }
+        corps.addView(grille)
+        dlg = AlertDialog.Builder(this).setTitle("Mes signatures")
+            .setView(ScrollView(this).apply { addView(corps) })
+            .setPositiveButton("＋ Dessiner") { _, _ ->
+                Signature.creer(this) { signaturesChangees(); statut("Signature gardée."); mesSignatures() }
+            }
+            .setNeutralButton("Importer…") { _, _ ->
+                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE); type = "image/*"
+                    putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/png", "image/jpeg"))
+                }, IMPORTER_SIGNATURE)
+            }
+            .setNegativeButton("Fermer", null).show()
+    }
+
+    /** Le panneau Signer, s'il est ouvert, montre la galerie à jour. */
+    private fun signaturesChangees() { if (copie != null && outilActif == Outil.SIGNER) rafraichirPanneau() }
+
+    private fun importerSignature(uri: Uri) {
+        val f = Signature.nouveau(this)
+        try {
+            contentResolver.openInputStream(uri)?.use { e -> f.outputStream().use { e.copyTo(it) } }
+        } catch (e: Exception) { f.delete(); return erreur(ErreurPdf("Image illisible.")) }
+        if (android.graphics.BitmapFactory.decodeFile(f.path) == null) { f.delete(); return erreur(ErreurPdf("Image illisible.")) }
+        signaturesChangees()
+        statut("Image gardée dans « Mes signatures ».")
+        mesSignatures()
     }
 
     fun choisirImage() {
@@ -928,6 +993,7 @@ class MainActivity : Activity() {
         if (uris.isEmpty()) return
         when (code) {
             OUVRIR -> ouvrirUri(uris[0])
+            IMPORTER_SIGNATURE -> importerSignature(uris[0])
             CREER_FICHIER -> {
                 val octets = aEcrire ?: return
                 aEcrire = null
