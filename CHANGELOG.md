@@ -11,6 +11,13 @@ Numérotation : MAJEUR.MINEUR.CORRECTIF.
 Une bêta (tag `v1.2.0-beta.1`) reprend les notes de sa version (`1.2.0`) si
 elle n'a pas de section propre.
 
+## [1.12.0]
+
+- Nouvelle signature : un cadre beaucoup plus grand pour signer à l'aise.
+- « Annuler le trait » (ou Ctrl+Z) retire seulement le dernier trait ; « Effacer » recommence tout.
+- Épaisseur du trait au choix : Fin, Moyen ou Épais.
+- Vos signatures ont un nom (Signature, Initiales, Paraphe…), affiché sous chacune. Renommez-les ou supprimez-les dans « Mes signatures ».
+
 ## [1.11.0]
 
 - Mes signatures : gardez plusieurs signatures (signature complète, initiales, tampon). Créez-les, importez une image ou supprimez-les depuis l'accueil, même sans PDF ouvert.
