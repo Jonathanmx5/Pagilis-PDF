@@ -27,6 +27,7 @@ object Theme {
     val TEXTE_DISCRET = Color.parseColor("#80838c")
     val ACCENT = Color.parseColor("#3d7bf5")
     val ACCENT_DOUX = Color.parseColor("#253552")
+    val ACCENT_CLAIR = Color.parseColor("#7aa5ff")
     val DANGER = Color.parseColor("#d64848")
     val AVERTISSEMENT = Color.parseColor("#e0a800")
 
@@ -53,9 +54,29 @@ object Theme {
         }
     }
 
+    /** Texte précédé d'une icône au trait, centrée sur la ligne (pour les boutons). */
+    fun avecIcone(ctx: Context, picto: Picto, texte: String, couleur: Int = TEXTE_2): CharSequence =
+        android.text.SpannableString(if (texte.isEmpty()) " " else "  $texte").apply {
+            setSpan(SpanIcone(picto.dessin(couleur), ctx.dp(20), if (texte.isEmpty()) 0 else ctx.dp(4)), 0, 1,
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+
+    private class SpanIcone(val icone: android.graphics.drawable.Drawable, val taille: Int, val marge: Int) :
+        android.text.style.ReplacementSpan() {
+        override fun getSize(p: android.graphics.Paint, t: CharSequence?, debut: Int, fin: Int,
+                             fm: android.graphics.Paint.FontMetricsInt?): Int = taille + marge
+        override fun draw(c: android.graphics.Canvas, t: CharSequence?, debut: Int, fin: Int, x: Float,
+                          haut: Int, y: Int, bas: Int, p: android.graphics.Paint) {
+            val fm = p.fontMetricsInt
+            val milieu = y + (fm.ascent + fm.descent) / 2
+            icone.setBounds(x.toInt(), milieu - taille / 2, x.toInt() + taille, milieu + taille / 2)
+            icone.draw(c)
+        }
+    }
+
     enum class Style { PRINCIPAL, SECONDAIRE, DISCRET, DANGER }
 
-    fun bouton(ctx: Context, texte: String, style: Style = Style.SECONDAIRE, action: () -> Unit): Button =
+    fun bouton(ctx: Context, texte: CharSequence, style: Style = Style.SECONDAIRE, action: () -> Unit): Button =
         Button(ctx).apply {
             text = texte
             isAllCaps = false

@@ -12,6 +12,7 @@ import android.provider.OpenableColumns
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -431,7 +432,9 @@ class MainActivity : Activity() {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
                 if (vertical) setPadding(dp(4), dp(8), dp(4), dp(8)) else setPadding(dp(1), dp(2), dp(1), dp(2))
-                addView(TextView(context).apply { text = o.symbole; textSize = if (vertical) 22f else 20f; gravity = Gravity.CENTER; setTextColor(Theme.TEXTE) })
+                val taille = dp(if (vertical) 26 else 24)
+                addView(ImageView(context).apply { setImageDrawable(o.picto.dessin(Theme.TEXTE_2)) },
+                    LinearLayout.LayoutParams(taille, taille).apply { bottomMargin = dp(3) })
                 addView(TextView(context).apply {
                     text = if (vertical) o.libelle else o.court; textSize = if (vertical) 12f else 11f; gravity = Gravity.CENTER; setTextColor(Theme.TEXTE_2)
                     maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
@@ -545,16 +548,16 @@ class MainActivity : Activity() {
         accueil.addView(Theme.texte(this, "Signez, remplissez, annotez, scannez, réorganisez les pages.").apply { gravity = Gravity.CENTER })
         accueil.addView(Theme.bouton(this, "Ouvrir un PDF", Theme.Style.PRINCIPAL) { choisirFichier() },
             LinearLayout.LayoutParams(large(240), dp(52)).apply { topMargin = dp(22) })
-        accueil.addView(Theme.bouton(this, "📷  Scanner un document", Theme.Style.SECONDAIRE) { scanner.commencer() },
+        accueil.addView(Theme.bouton(this, Theme.avecIcone(this, Picto.SCANNER, "Scanner un document"), Theme.Style.SECONDAIRE) { scanner.commencer() },
             LinearLayout.LayoutParams(large(240), dp(52)).apply { topMargin = dp(10) })
-        accueil.addView(Theme.bouton(this, "✒️  Mes signatures", Theme.Style.SECONDAIRE) { mesSignatures() },
+        accueil.addView(Theme.bouton(this, Theme.avecIcone(this, Picto.SIGNER, "Mes signatures"), Theme.Style.SECONDAIRE) { mesSignatures() },
             LinearLayout.LayoutParams(large(240), dp(52)).apply { topMargin = dp(10) })
         val recents = Recents.liste(this)
         if (recents.isNotEmpty()) {
             accueil.addView(Theme.titre(this, "Récents", 15f).apply { setPadding(0, dp(30), 0, dp(6)) },
                 LinearLayout.LayoutParams(large(420), -2))
             for ((uri, n) in recents.take(6)) {
-                accueil.addView(Theme.bouton(this, "📄  $n", Theme.Style.DISCRET) { ouvrirUri(uri) }.apply {
+                accueil.addView(Theme.bouton(this, Theme.avecIcone(this, Picto.DOCUMENT, n), Theme.Style.DISCRET) { ouvrirUri(uri) }.apply {
                     gravity = Gravity.START or Gravity.CENTER_VERTICAL
                     maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
                 }, LinearLayout.LayoutParams(large(420), dp(46)))
@@ -586,7 +589,12 @@ class MainActivity : Activity() {
         if (!reconstruire || o != outilActif) outils[outilActif]?.quitter()
         outilActif = o
         boutonsOutils.forEach { (outil, v) ->
-            v.background = if (outil == o) Theme.fond(Theme.ACCENT_DOUX, dp(10f)) else null
+            val actif = outil == o
+            v.background = if (actif) Theme.fond(Theme.ACCENT_DOUX, dp(10f)) else null
+            // L'outil actif ressort en bleu ; les autres restent gris clair.
+            val g = v as ViewGroup
+            ((g.getChildAt(0) as ImageView).drawable as Icone).couleur = if (actif) Theme.ACCENT_CLAIR else Theme.TEXTE_2
+            (g.getChildAt(1) as TextView).setTextColor(if (actif) Theme.TEXTE else Theme.TEXTE_2)
         }
         panneau.removeAllViews()
         val p = outils.getValue(o)

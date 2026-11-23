@@ -45,7 +45,7 @@ class Scanner(private val a: MainActivity) {
     fun commencer() {
         pages.clear()
         AlertDialog.Builder(a).setTitle("Scanner un document")
-            .setItems(arrayOf("📷  Prendre une photo", "🖼  Choisir des images")) { _, i ->
+            .setItems(arrayOf("Prendre une photo", "Choisir des images")) { _, i ->
                 if (i == 0) prendrePhoto() else choisirImages()
             }.setNegativeButton("Annuler", null).show()
     }

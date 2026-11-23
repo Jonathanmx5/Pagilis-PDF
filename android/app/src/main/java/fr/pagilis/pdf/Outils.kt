@@ -28,15 +28,15 @@ import fr.pagilis.pdf.Theme.dp
 import java.io.File
 import kotlin.math.max
 
-enum class Outil(val libelle: String, val court: String, val symbole: String, val titre: String, val description: String,
+enum class Outil(val libelle: String, val court: String, val picto: Picto, val titre: String, val description: String,
                  val exigeDocument: Boolean) {
-    LIRE("Lire", "Lire", "📖", "Lire", "Glissez pour changer de page, pincez pour zoomer. Touchez une case de formulaire pour la remplir.", false),
-    SIGNER("Signer", "Signer", "✒️", "Signer", "Posez votre signature (ou un tampon) sur la page, ou créez des cases à signer.", true),
-    TEXTE("Texte", "Texte", "Aa", "Ajouter du texte", "Une date, une mention : touchez la page à l'endroit voulu.", true),
-    ANNOTER("Annoter", "Annoter", "🖍", "Annoter", "Surligner, dessiner, encadrer, laisser une note. Lisibles dans tous les lecteurs PDF.", true),
-    PAGES("Pages", "Pages", "▦", "Pages", "Touchez les vignettes pour les choisir. Restez appuyé puis glissez pour changer l'ordre.", true),
-    FUSION("Fusionner", "Fusion", "⊕", "Fusionner", "Assembler plusieurs PDF dans l'ordre choisi.", false),
-    DECOUPE("Découper", "Découpe", "✂️", "Découper", "Séparer le PDF ouvert en plusieurs fichiers.", true);
+    LIRE("Lire", "Lire", Picto.LIRE, "Lire", "Glissez pour changer de page, pincez pour zoomer. Touchez une case de formulaire pour la remplir.", false),
+    SIGNER("Signer", "Signer", Picto.SIGNER, "Signer", "Posez votre signature (ou un tampon) sur la page, ou créez des cases à signer.", true),
+    TEXTE("Texte", "Texte", Picto.TEXTE, "Ajouter du texte", "Une date, une mention : touchez la page à l'endroit voulu.", true),
+    ANNOTER("Annoter", "Annoter", Picto.ANNOTER, "Annoter", "Surligner, dessiner, encadrer, laisser une note. Lisibles dans tous les lecteurs PDF.", true),
+    PAGES("Pages", "Pages", Picto.PAGES, "Pages", "Touchez les vignettes pour les choisir. Restez appuyé puis glissez pour changer l'ordre.", true),
+    FUSION("Fusionner", "Fusion", Picto.FUSION, "Fusionner", "Assembler plusieurs PDF dans l'ordre choisi.", false),
+    DECOUPE("Découper", "Découpe", Picto.DECOUPE, "Découper", "Séparer le PDF ouvert en plusieurs fichiers.", true);
 
     fun creer(a: MainActivity): OutilPanneau = when (this) {
         LIRE -> OutilLire(a)
@@ -151,14 +151,14 @@ class OutilSigner(a: MainActivity) : OutilPanneau(a), Interaction {
         }
         // Une seule rangée : nouvelle signature, tampon, case à signer.
         val l = LinearLayout(a)
-        fun b(t: String, style: Theme.Style, poids: Float, f: () -> Unit) = l.addView(
+        fun b(t: CharSequence, style: Theme.Style, poids: Float, f: () -> Unit) = l.addView(
             Theme.bouton(a, t, style, f).apply { textSize = 14f; maxLines = 1; setPadding(a.dp(8), 0, a.dp(8), 0) },
             LinearLayout.LayoutParams(0, a.dp(48), poids).apply { if (l.childCount > 0) marginStart = a.dp(6) })
         b(if (gardees.isEmpty()) "Créer ma signature" else "＋ Nouvelle", Theme.Style.SECONDAIRE, 1.2f) {
             Signature.creer(a) { f -> utiliser(f, "Ma signature") }
         }
         b("Tampon…", Theme.Style.SECONDAIRE, 1f) { a.choisirImage() }
-        b(if (tracer) "✕ Tracé" else "▭ Case", if (tracer) Theme.Style.DANGER else Theme.Style.SECONDAIRE, 1f) {
+        b(if (tracer) "✕ Tracé" else Theme.avecIcone(a, Picto.CASE, "Case"), if (tracer) Theme.Style.DANGER else Theme.Style.SECONDAIRE, 1f) {
             tracer = !tracer; cadre = null
             a.rafraichirPanneau()
             a.statut(if (tracer) "Glissez sur la page pour tracer la case de signature (pour vous ou pour l'autre personne)."
@@ -167,7 +167,7 @@ class OutilSigner(a: MainActivity) : OutilPanneau(a), Interaction {
         p.addView(l)
         if (a.tablette) p.addView(Theme.texte(a,
             (libelle?.let { "$it : touchez la page pour la poser. " } ?: "Créez votre signature, ou choisissez une image (signature scannée, tampon…). ") +
-            "Une signature posée se déplace en la faisant glisser. « ▭ Case » trace une case à signer, pour vous ou pour la personne qui recevra le PDF."
+            "Une signature posée se déplace en la faisant glisser. « Case » trace une case à signer, pour vous ou pour la personne qui recevra le PDF."
         ).apply { setPadding(0, a.dp(8), 0, 0) })
         else if (!tracer) a.statut(libelle?.let { "$it : touchez la page pour la poser. Touchez une case encadrée pour y signer." }
             ?: "Créez votre signature, ou choisissez une image.")
@@ -497,11 +497,11 @@ class OutilPages(a: MainActivity) : OutilPanneau(a) {
 
     override fun construire(p: LinearLayout) {
         val actions = LinearLayout(a)
-        fun b(t: String, style: Theme.Style = Theme.Style.SECONDAIRE, f: () -> Unit) =
+        fun b(t: CharSequence, style: Theme.Style = Theme.Style.SECONDAIRE, f: () -> Unit) =
             actions.addView(Theme.bouton(a, t, style, f).apply { textSize = 18f }, LinearLayout.LayoutParams(0, a.dp(48), 1f).apply { marginEnd = a.dp(6) })
         b("⟲") { pivoter(-90) }
         b("⟳") { pivoter(90) }
-        b("🗑", Theme.Style.DANGER) { supprimer() }
+        b(Theme.avecIcone(a, Picto.SUPPRIMER, "", Theme.DANGER), Theme.Style.DANGER) { supprimer() }
         p.addView(actions)
         val l2 = LinearLayout(a)
         l2.addView(Theme.bouton(a, "Insérer un PDF…") { a.choisirFichier(MainActivity.INSERER_PDF) }, LinearLayout.LayoutParams(0, a.dp(48), 1f).apply { marginEnd = a.dp(6) })
