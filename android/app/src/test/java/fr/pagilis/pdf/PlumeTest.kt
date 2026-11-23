@@ -28,4 +28,42 @@ class PlumeTest {
         assertTrue(l.size > t.size)
         assertEquals(0f, l.first()[0]); assertEquals(30f, l.last()[0])
     }
+
+    @Test
+    fun pressionDuStyletAffineOuEpaissit() {
+        fun trait(p: Float) = (0..20).map { floatArrayOf(it * 5f, it * 5f, p) }
+        val leger = surface(trait(0.5f))
+        val appuye = surface(trait(1.2f))
+        assertTrue("léger $leger, appuyé $appuye", appuye > 2 * leger)
+        // Le lissage garde la pression avec chaque point.
+        val l = Plume.lisser(listOf(floatArrayOf(0f, 0f, 0.5f), floatArrayOf(10f, 20f, 1f), floatArrayOf(30f, 0f, 0.5f)))
+        assertTrue(l.all { it.size == 3 && it[2] in 0.5f..1f })
+    }
+}
+
+class NomsSignaturesTest {
+    @get:org.junit.Rule val dossier = org.junit.rules.TemporaryFolder()
+
+    @Test
+    fun nomGardeACoteDeLImage() {
+        val f = dossier.newFile("sig_1.png")
+        assertEquals("Signature", Signature.nom(f))
+        Signature.nommer(f, "  Initiales ")
+        assertEquals("Initiales", Signature.nom(f))
+        Signature.nommer(f, "   ")
+        assertEquals("Signature", Signature.nom(f))
+        Signature.nommer(f, "Paraphe")
+        Signature.supprimer(f)
+        assertTrue(dossier.root.listFiles()!!.isEmpty())
+    }
+
+    @Test
+    fun nomProposeSelonCeQuiExiste() {
+        assertEquals("Signature", Signature.nomPropose(emptyList()))
+        val a = dossier.newFile("sig_1.png").also { Signature.nommer(it, "Signature") }
+        assertEquals("Initiales", Signature.nomPropose(listOf(a)))
+        val b = dossier.newFile("sig_2.png").also { Signature.nommer(it, "Initiales") }
+        val c = dossier.newFile("sig_3.png").also { Signature.nommer(it, "Paraphe") }
+        assertEquals("Signature 2", Signature.nomPropose(listOf(a, b, c)))
+    }
 }

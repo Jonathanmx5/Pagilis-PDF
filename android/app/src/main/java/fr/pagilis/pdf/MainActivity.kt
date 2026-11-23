@@ -707,7 +707,7 @@ class MainActivity : Activity() {
 
     /**
      * « Mes signatures », sans document ouvert : créer une signature, importer un tampon
-     * ou une signature scannée, supprimer (toucher une miniature).
+     * ou une signature scannée ; toucher une miniature pour la renommer ou la supprimer.
      */
     fun mesSignatures() {
         val gardees = Signature.liste(this)
@@ -715,25 +715,16 @@ class MainActivity : Activity() {
         val corps = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(4), dp(20), 0) }
         corps.addView(Theme.texte(this, if (gardees.isEmpty())
             "Aucune signature pour l'instant. Dessinez-la au doigt, ou importez une image (signature scannée, tampon PNG transparent)."
-        else "Gardées sur cet appareil, prêtes à poser dans n'importe quel PDF. Touchez-en une pour la supprimer."))
+        else "Gardées sur cet appareil, prêtes à poser dans n'importe quel PDF. Touchez-en une pour la renommer ou la supprimer."))
         val grille = android.widget.GridLayout(this).apply { columnCount = 2 }
         for (f in gardees.reversed()) {
-            grille.addView(ImageView(this).apply {
-                scaleType = ImageView.ScaleType.FIT_CENTER
-                setPadding(dp(6), dp(4), dp(6), dp(4))
-                background = android.graphics.drawable.LayerDrawable(arrayOf(Theme.damier(this@MainActivity),
-                    Theme.fond(Color.TRANSPARENT, dp(8f), Theme.BORDURE, dp(1))))
-                clipToOutline = true
-                setImageBitmap(Signature.apercu(f))
-                contentDescription = "Signature"
+            grille.addView(Signature.vignette(this, f, Signature.apercu(f), hauteur = 64).apply {
                 setOnClickListener {
-                    AlertDialog.Builder(this@MainActivity).setMessage("Supprimer cette signature de l'appareil ?")
-                        .setPositiveButton("Supprimer") { _, _ -> f.delete(); dlg?.dismiss(); signaturesChangees(); mesSignatures() }
-                        .setNegativeButton("Annuler", null).show()
+                    Signature.gerer(this@MainActivity, f) { dlg?.dismiss(); signaturesChangees(); mesSignatures() }
                 }
             }, android.widget.GridLayout.LayoutParams(android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED),
                 android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f)).apply {
-                width = 0; height = dp(64); setMargins(dp(4), dp(10), dp(4), 0)
+                width = 0; setMargins(dp(4), dp(10), dp(4), 0)
             })
         }
         corps.addView(grille)
@@ -760,6 +751,7 @@ class MainActivity : Activity() {
             contentResolver.openInputStream(uri)?.use { e -> f.outputStream().use { e.copyTo(it) } }
         } catch (e: Exception) { f.delete(); return erreur(ErreurPdf("Image illisible.")) }
         if (android.graphics.BitmapFactory.decodeFile(f.path) == null) { f.delete(); return erreur(ErreurPdf("Image illisible.")) }
+        Signature.nommer(f, nomDe(uri).substringBeforeLast('.').ifBlank { "Tampon" })
         signaturesChangees()
         statut("Image gardée dans « Mes signatures ».")
         mesSignatures()

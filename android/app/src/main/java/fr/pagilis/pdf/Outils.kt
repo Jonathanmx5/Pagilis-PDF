@@ -105,7 +105,7 @@ class OutilLire(a: MainActivity) : OutilPanneau(a) {
 class OutilSigner(a: MainActivity) : OutilPanneau(a), Interaction {
     private var image: File? = Signature.enregistree(a)
     private var ratio = image?.let { Signature.ratio(it) } ?: 0.4f
-    private var libelle = if (image != null) "Ma signature" else null
+    private var libelle = image?.let { Signature.nom(it) }
     private val miniatures = mutableMapOf<String, Bitmap?>()
     private var largeur = 160f            // points PDF
     private var opacite = 100
@@ -117,34 +117,27 @@ class OutilSigner(a: MainActivity) : OutilPanneau(a), Interaction {
         val gardees = Signature.liste(a)
         // Signature créée ailleurs (en touchant une case) : elle devient la signature choisie.
         if (image?.exists() != true && gardees.isNotEmpty()) {
-            image = gardees.last(); ratio = Signature.ratio(image!!); libelle = "Ma signature"; apercu = null
+            image = gardees.last(); ratio = Signature.ratio(image!!); libelle = Signature.nom(image!!); apercu = null
         }
         section(p, if (gardees.isEmpty()) "Image" else "Mes signatures et tampons")
         if (gardees.isNotEmpty()) {
-            // Signature complète, initiales… : on touche pour choisir, on reste appuyé pour supprimer.
+            // Signature complète, initiales… : on touche pour choisir, on reste appuyé pour renommer ou supprimer.
             val rang = LinearLayout(a)
             for (f in gardees) {
-                val img = ImageView(a).apply {
-                    scaleType = ImageView.ScaleType.FIT_CENTER
-                    setPadding(a.dp(6), a.dp(4), a.dp(6), a.dp(4))
-                    background = android.graphics.drawable.LayerDrawable(arrayOf(Theme.damier(a),
-                        Theme.fond(android.graphics.Color.TRANSPARENT, a.dp(8f),
-                            if (f == image) Theme.ACCENT else Theme.BORDURE, a.dp(if (f == image) 3 else 1))))
-                    clipToOutline = true
-                    setImageBitmap(miniatures.getOrPut(f.path) { Signature.apercu(f) })
-                    contentDescription = "Signature"
-                    setOnClickListener { utiliser(f, "Ma signature") }
+                val img = Signature.vignette(a, f, miniatures.getOrPut(f.path) { Signature.apercu(f) }, f == image, 52).apply {
+                    setOnClickListener { utiliser(f, Signature.nom(f)) }
                     setOnLongClickListener {
-                        AlertDialog.Builder(a).setMessage("Supprimer cette signature de l'appareil ?")
-                            .setPositiveButton("Supprimer") { _, _ ->
-                                f.delete(); miniatures.remove(f.path)
-                                if (image == f) { image = Signature.enregistree(a); libelle = if (image != null) "Ma signature" else null; apercu = null }
-                                a.rafraichirPanneau()
-                            }.setNegativeButton("Annuler", null).show()
+                        Signature.gerer(a, f) {
+                            miniatures.remove(f.path)
+                            if (!f.exists() && image == f) image = Signature.enregistree(a)
+                            image?.let { libelle = Signature.nom(it) } ?: run { libelle = null }
+                            apercu = null
+                            a.rafraichirPanneau()
+                        }
                         true
                     }
                 }
-                rang.addView(img, LinearLayout.LayoutParams(a.dp(104), a.dp(52)).apply { marginEnd = a.dp(8) })
+                rang.addView(img, LinearLayout.LayoutParams(a.dp(104), -2).apply { marginEnd = a.dp(8) })
             }
             p.addView(android.widget.HorizontalScrollView(a).apply { isHorizontalScrollBarEnabled = false; addView(rang) },
                 LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = a.dp(8) })
@@ -155,7 +148,7 @@ class OutilSigner(a: MainActivity) : OutilPanneau(a), Interaction {
             Theme.bouton(a, t, style, f).apply { textSize = 14f; maxLines = 1; setPadding(a.dp(8), 0, a.dp(8), 0) },
             LinearLayout.LayoutParams(0, a.dp(48), poids).apply { if (l.childCount > 0) marginStart = a.dp(6) })
         b(if (gardees.isEmpty()) "Créer ma signature" else "＋ Nouvelle", Theme.Style.SECONDAIRE, 1.2f) {
-            Signature.creer(a) { f -> utiliser(f, "Ma signature") }
+            Signature.creer(a) { f -> utiliser(f, Signature.nom(f)) }
         }
         b("Tampon…", Theme.Style.SECONDAIRE, 1f) { a.choisirImage() }
         b(if (tracer) "✕ Tracé" else Theme.avecIcone(a, Picto.CASE, "Case"), if (tracer) Theme.Style.DANGER else Theme.Style.SECONDAIRE, 1f) {
@@ -225,7 +218,8 @@ class OutilSigner(a: MainActivity) : OutilPanneau(a), Interaction {
         val f = Signature.nouveau(a)
         a.contentResolver.openInputStream(uris[0])?.use { e -> f.outputStream().use { e.copyTo(it) } }
         if (BitmapFactory.decodeFile(f.path) == null) { f.delete(); return a.erreur(ErreurPdf("Image illisible.")) }
-        utiliser(f, a.nomDe(uris[0]))
+        Signature.nommer(f, a.nomDe(uris[0]).substringBeforeLast('.').ifBlank { "Tampon" })
+        utiliser(f, Signature.nom(f))
         a.statut("Image gardée dans « Mes signatures et tampons ». Touchez la page pour la poser.")
     }
 
