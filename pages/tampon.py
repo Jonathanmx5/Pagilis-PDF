@@ -91,7 +91,7 @@ class PageTampon(PageCopie):
         self.bouton_action("Poser la signature", self.lancer_tampon, icone_nom="signer")
         memorisee = signature.signature_enregistree(self.app.dossier_donnees)
         if memorisee:
-            self.utiliser_image(memorisee, "Ma signature")
+            self.utiliser_image(memorisee, signature.nom(memorisee))
 
     def _rotation(self) -> int:
         return int(self.rotation_tampon.get().rstrip("°"))
@@ -106,7 +106,7 @@ class PageTampon(PageCopie):
     def creer_signature(self, ensuite=None):
         """Fenêtre « Créer ma signature » ; la signature créée devient l'image à poser."""
         def fin(chemin):
-            self.utiliser_image(chemin, "Ma signature")
+            self.utiliser_image(chemin, signature.nom(chemin))
             if ensuite:
                 ensuite(chemin)
         signature.FenetreSignature(self.app, self.app.dossier_donnees, fin)
@@ -114,7 +114,7 @@ class PageTampon(PageCopie):
     def mes_signatures(self, ensuite=None, titre: str = "Choisir une signature"):
         """Bibliothèque des signatures : celle qu'on clique devient l'image à poser."""
         def fin(chemin):
-            self.utiliser_image(chemin, "Ma signature")
+            self.utiliser_image(chemin, signature.nom(chemin))
             if ensuite:
                 ensuite(chemin)
         signature.FenetreMesSignatures(self.app, self.app.dossier_donnees, choisir=fin, titre=titre)

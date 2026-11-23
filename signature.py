@@ -31,6 +31,7 @@ ANGLE_BEC = 40
 DELIE = 1            # épaisseur minimale d'un délié, en pixels écran
 AMINCI = 4           # nombre de points sur lesquels le trait s'affine en début et en fin
 ENCRES = {"Noire": (25, 25, 35), "Bleue": (20, 50, 140)}
+EPAISSEURS = {"Fin": 5, "Moyen": LARGEUR_BEC, "Épais": 10}  # largeur du bec, en pixels écran
 DOSSIER_POLICES = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
 # Polices manuscrites livrées avec Windows ou Office, de la plus lisible à la plus ornée.
 POLICES_MANUSCRITES = [
@@ -69,7 +70,8 @@ def _lisser(trait: list[tuple[float, float]], passes: int = 2) -> list[tuple[flo
     return trait
 
 
-def polygones_plume(trait: list[tuple[float, float]], echelle: float = 1) -> list[list[tuple[float, float]]]:
+def polygones_plume(trait: list[tuple[float, float]], echelle: float = 1,
+                    bec_px: float = LARGEUR_BEC) -> list[list[tuple[float, float]]]:
     """Formes laissées par la plume le long du trait (coordonnées multipliées par echelle).
 
     Chaque segment est la surface balayée par le bec ; le bec s'affine aux deux bouts
@@ -78,7 +80,7 @@ def polygones_plume(trait: list[tuple[float, float]], echelle: float = 1) -> lis
     if not trait:
         return []
     angle = math.radians(ANGLE_BEC)
-    bec = (math.cos(angle) * LARGEUR_BEC / 2 * echelle, -math.sin(angle) * LARGEUR_BEC / 2 * echelle)
+    bec = (math.cos(angle) * bec_px / 2 * echelle, -math.sin(angle) * bec_px / 2 * echelle)
     pts = [(x * echelle, y * echelle) for x, y in trait]
     if len(pts) == 1:  # un simple clic : une goutte d'encre en forme de bec
         (x, y), (bx, by) = pts[0], bec
@@ -96,20 +98,21 @@ def polygones_plume(trait: list[tuple[float, float]], echelle: float = 1) -> lis
     return formes
 
 
-def image_trace(traits: list[list[tuple[float, float]]], encre: tuple[int, int, int]) -> Image.Image | None:
+def image_trace(traits: list[list[tuple[float, float]]], encre: tuple[int, int, int],
+                bec_px: float = LARGEUR_BEC) -> Image.Image | None:
     """Image des traits tracés à la plume (coordonnées écran), ou None s'il n'y a rien."""
     traits = [[(x + MARGE, y + MARGE) for x, y in t] for t in traits if t]
     if not traits:
         return None
     points = [p for trait in traits for p in trait]
     fin = 2 * ECHELLE  # dessiné deux fois plus fin, puis réduit : bords lissés
-    largeur = int((max(x for x, _y in points) + MARGE + LARGEUR_BEC) * fin)
-    hauteur = int((max(y for _x, y in points) + MARGE + LARGEUR_BEC) * fin)
+    largeur = int((max(x for x, _y in points) + MARGE + bec_px) * fin)
+    hauteur = int((max(y for _x, y in points) + MARGE + bec_px) * fin)
     masque = Image.new("L", (largeur, hauteur), 0)
     dessin = ImageDraw.Draw(masque)
     for trait in traits:
         trait = _lisser(trait)
-        for forme in polygones_plume(trait, fin):
+        for forme in polygones_plume(trait, fin, bec_px):
             dessin.polygon(forme, fill=255)
         if len(trait) > 1:  # le délié garde toujours un filet d'encre
             dessin.line([(x * fin, y * fin) for x, y in trait], fill=255, width=DELIE * fin)
@@ -156,26 +159,67 @@ def liste(dossier: str) -> list[str]:
     return sorted(chemins, key=lambda c: (os.path.getmtime(c), c), reverse=True)
 
 
-def enregistrer(image: Image.Image, dossier: str) -> str:
-    """Ajoute une signature à la bibliothèque ; retourne son chemin."""
+def enregistrer(image: Image.Image, dossier: str, nom: str | None = None) -> str:
+    """Ajoute une signature à la bibliothèque, avec son nom ; retourne son chemin."""
     chemin = _nouveau_chemin(_bibliotheque(dossier))
     image.save(chemin + ".part", format="PNG")
     os.replace(chemin + ".part", chemin)
+    if nom:
+        nommer(chemin, nom)
     return chemin
 
 
-def importer(source: str, dossier: str) -> str:
+def importer(source: str, dossier: str, nom: str | None = None) -> str:
     """Copie une image (signature scannée, tampon) dans la bibliothèque. OSError si illisible."""
     with Image.open(source) as im:
         image = im.convert("RGBA")
-    return enregistrer(image, dossier)
+    return enregistrer(image, dossier, nom or os.path.splitext(os.path.basename(source))[0] or "Tampon")
 
 
-def supprimer(chemin: str) -> None:
+def _fichier_nom(chemin: str) -> str:
+    """Le nom est gardé à côté de l'image : 123.png -> 123.txt."""
+    return os.path.splitext(chemin)[0] + ".txt"
+
+
+def nom(chemin: str) -> str:
+    try:
+        with open(_fichier_nom(chemin), encoding="utf-8") as f:
+            return f.read().strip() or "Signature"
+    except OSError:
+        return "Signature"
+
+
+def nommer(chemin: str, nouveau: str) -> None:
+    nouveau = nouveau.strip()
+    if nouveau:
+        with open(_fichier_nom(chemin), "w", encoding="utf-8") as f:
+            f.write(nouveau)
+    else:
+        _retirer(_fichier_nom(chemin))
+
+
+def nom_propose(dossier: str) -> str:
+    """Signature, puis Initiales, puis Paraphe ; ensuite « Signature 2 »…"""
+    pris = {nom(c) for c in liste(dossier)}
+    for candidat in ("Signature", "Initiales", "Paraphe"):
+        if candidat not in pris:
+            return candidat
+    n = 2
+    while f"Signature {n}" in pris:
+        n += 1
+    return f"Signature {n}"
+
+
+def _retirer(chemin: str) -> None:
     try:
         os.remove(chemin)
     except FileNotFoundError:
         pass
+
+
+def supprimer(chemin: str) -> None:
+    _retirer(chemin)
+    _retirer(_fichier_nom(chemin))
 
 
 def signature_enregistree(dossier: str) -> str | None:
@@ -184,28 +228,33 @@ def signature_enregistree(dossier: str) -> str | None:
 
 
 class FenetreSignature(ctk.CTkToplevel):
-    """« Créer ma signature » : onglets Dessiner et Écrire, encre, Valider."""
+    """« Nouvelle signature » : nom, onglets Dessiner et Écrire, encre, épaisseur, Valider."""
 
-    LARGEUR, HAUTEUR = 560, 200
+    LARGEUR, HAUTEUR = 820, 290
 
     def __init__(self, parent, dossier: str, a_la_fin: Callable[[str], None]):
         super().__init__(parent)
         self.dossier, self.a_la_fin = dossier, a_la_fin
-        self.title(f"Créer ma signature — {identite.NOM_AFFICHE}")
+        self.title(f"Nouvelle signature — {identite.NOM_AFFICHE}")
         theme.poser_icone(self)
         self.configure(fg_color=theme.FOND)
-        self.geometry("760x620")
+        self.geometry("900x560")
         self.resizable(False, False)
         self.transient(parent)
         self.traits: list[list[tuple[float, float]]] = []
         self.polices = polices_disponibles()
 
-        ctk.CTkLabel(self, text="Créer ma signature", font=theme.police(18, gras=True),
-                     text_color=theme.TEXTE).pack(anchor="w", padx=24, pady=(20, 2))
-        ctk.CTkLabel(self, text="Elle sera gardée sur ce PC avec vos autres signatures (initiales, tampon…).",
-                     font=theme.police(12), text_color=theme.TEXTE_2).pack(anchor="w", padx=24)
+        haut = ctk.CTkFrame(self, fg_color="transparent")
+        haut.pack(fill="x", padx=24, pady=(20, 0))
+        ctk.CTkLabel(haut, text="Nouvelle signature", font=theme.police(18, gras=True),
+                     text_color=theme.TEXTE).pack(side="left")
+        self.libelle = ctk.StringVar(value=nom_propose(dossier))
+        theme.champ(haut, textvariable=self.libelle, width=220).pack(side="right")
+        ctk.CTkLabel(haut, text="Nom", font=theme.police(13), text_color=theme.TEXTE_2).pack(side="right", padx=8)
+        ctk.CTkLabel(self, text="Gardée sur ce PC avec vos autres signatures : nommez-la (Signature, Initiales…) "
+                     "pour la retrouver.", font=theme.police(12), text_color=theme.TEXTE_2).pack(anchor="w", padx=24)
 
-        self.onglets = ctk.CTkTabview(self, fg_color=theme.SURFACE, height=290,
+        self.onglets = ctk.CTkTabview(self, fg_color=theme.SURFACE, height=350,
                                       segmented_button_selected_color=theme.ACCENT,
                                       command=self._apercu_texte)
         self.onglets.pack(fill="x", padx=24, pady=(12, 0))
@@ -225,6 +274,11 @@ class FenetreSignature(ctk.CTkToplevel):
         ctk.CTkLabel(bas, text="Signez dans le cadre : le trait imite une plume (pleins et déliés).",
                      font=theme.police(12), text_color=theme.TEXTE_2).pack(side="left")
         theme.bouton(bas, "Effacer", self.effacer, style="discret", icone_nom="supprimer").pack(side="right")
+        self.bouton_trait = theme.bouton(bas, "Annuler le trait", self.annuler_trait, style="discret",
+                                         icone_nom="annuler", bulle="Retire le dernier trait (Ctrl+Z)")
+        self.bouton_trait.pack(side="right", padx=4)
+        for touche in ("<Control-z>", "<Control-Z>"):
+            self.bind(touche, lambda _e: self.annuler_trait())
 
         # --- Écrire : nom dans une police manuscrite
         self.nom = ctk.StringVar()
@@ -246,7 +300,11 @@ class FenetreSignature(ctk.CTkToplevel):
         self.encre = ctk.StringVar(value="Bleue")
         ctk.CTkSegmentedButton(pied, values=list(ENCRES), variable=self.encre, selected_color=theme.ACCENT,
                                command=lambda _v: self._changer_encre()).pack(side="left", padx=10)
-        theme.bouton(pied, "Utiliser cette signature", self.valider, style="principal",
+        ctk.CTkLabel(pied, text="Trait", font=theme.police(13), text_color=theme.TEXTE).pack(side="left", padx=(8, 0))
+        self.epaisseur = ctk.StringVar(value="Moyen")
+        ctk.CTkSegmentedButton(pied, values=list(EPAISSEURS), variable=self.epaisseur, selected_color=theme.ACCENT,
+                               command=lambda _v: self._redessiner()).pack(side="left", padx=10)
+        theme.bouton(pied, "Garder et utiliser", self.valider, style="principal",
                      icone_nom="valider").pack(side="right")
         theme.bouton(pied, "Annuler", self.destroy, style="secondaire").pack(side="right", padx=8)
         self.message = ctk.CTkLabel(self, text="", font=theme.police(12), text_color=theme.DANGER)
@@ -259,22 +317,25 @@ class FenetreSignature(ctk.CTkToplevel):
     def _couleur(self) -> str:
         return "#%02x%02x%02x" % ENCRES[self.encre.get()]
 
+    def _bec(self) -> float:
+        return EPAISSEURS[self.epaisseur.get()]
+
     def _debut_trait(self, evenement):
         self.traits.append([(evenement.x, evenement.y)])
-        self._dessiner_formes(polygones_plume(self.traits[-1]), "en_cours")
+        self._dessiner_formes(polygones_plume(self.traits[-1], 1, self._bec()), "en_cours")
 
     def _suite_trait(self, evenement):
         if not self.traits:
             return self._debut_trait(evenement)
         self.traits[-1].append((evenement.x, evenement.y))
         self.zone.delete("en_cours")
-        self._dessiner_formes(polygones_plume(self.traits[-1]), "en_cours")
+        self._dessiner_formes(polygones_plume(self.traits[-1], 1, self._bec()), "en_cours")
 
     def _fin_trait(self, _evenement=None):
         """Trait terminé : redessiné lissé, comme il sera enregistré."""
         if self.traits:
             self.zone.delete("en_cours")
-            self._dessiner_formes(polygones_plume(_lisser(self.traits[-1])), "fini")
+            self._dessiner_formes(polygones_plume(_lisser(self.traits[-1]), 1, self._bec()), "fini")
 
     def _dessiner_formes(self, formes, etat: str):
         couleur = self._couleur()
@@ -285,6 +346,18 @@ class FenetreSignature(ctk.CTkToplevel):
     def effacer(self):
         self.traits.clear()
         self.zone.delete("encre")
+
+    def annuler_trait(self):
+        """Retire seulement le dernier trait."""
+        if self.traits:
+            self.traits.pop()
+            self._redessiner()
+
+    def _redessiner(self):
+        """Tous les traits, à l'épaisseur choisie (changer l'épaisseur s'applique à toute la signature)."""
+        self.zone.delete("encre")
+        for trait in self.traits:
+            self._dessiner_formes(polygones_plume(_lisser(trait), 1, self._bec()), "fini")
 
     def _changer_encre(self):
         self.zone.itemconfigure("encre", fill=self._couleur(), outline=self._couleur())
@@ -314,7 +387,7 @@ class FenetreSignature(ctk.CTkToplevel):
 
     def image(self) -> Image.Image | None:
         if self.onglets.get() == "Dessiner":
-            return image_trace(self.traits, ENCRES[self.encre.get()])
+            return image_trace(self.traits, ENCRES[self.encre.get()], self._bec())
         return self._image_texte()
 
     def valider(self):
@@ -323,7 +396,7 @@ class FenetreSignature(ctk.CTkToplevel):
             vide = "Signez d'abord dans le cadre." if self.onglets.get() == "Dessiner" else "Écrivez d'abord votre nom."
             self.message.configure(text=vide)
             return
-        chemin = enregistrer(image, self.dossier)
+        chemin = enregistrer(image, self.dossier, self.libelle.get().strip() or "Signature")
         self.destroy()
         self.a_la_fin(chemin)
 
@@ -393,17 +466,30 @@ class FenetreMesSignatures(ctk.CTkToplevel):
             vignette = ctk.CTkButton(case, text="", image=image, fg_color="white", hover_color="#dfe7fb",
                                      width=self.VIGNETTE[0] + 12, height=self.VIGNETTE[1] + 12, corner_radius=6,
                                      command=(lambda c=chemin: self._utiliser(c)) if self.choisir else None)
-            vignette.pack(padx=8, pady=(8, 4))
-            theme.bouton(case, "Supprimer", lambda c=chemin: self._supprimer(c), style="discret",
-                         icone_nom="supprimer", hauteur=26).pack(pady=(0, 6))
+            vignette.pack(padx=8, pady=(8, 2))
+            ctk.CTkLabel(case, text=nom(chemin), font=theme.police(13, gras=True), text_color=theme.TEXTE).pack()
+            actions = ctk.CTkFrame(case, fg_color="transparent")
+            actions.pack(pady=(0, 6))
+            theme.bouton(actions, "Renommer", lambda c=chemin: self._renommer(c), style="discret",
+                         icone_nom="modifier", hauteur=26).pack(side="left")
+            theme.bouton(actions, "Supprimer", lambda c=chemin: self._supprimer(c), style="discret",
+                         icone_nom="supprimer", hauteur=26).pack(side="left")
 
     def _utiliser(self, chemin: str):
         self.destroy()
         self.choisir(chemin)
 
+    def _renommer(self, chemin: str):
+        from tkinter import simpledialog
+        nouveau = simpledialog.askstring(identite.NOM_AFFICHE, "Nom de cette signature :",
+                                         initialvalue=nom(chemin), parent=self)
+        if nouveau is not None:
+            nommer(chemin, nouveau)
+            self.remplir()
+
     def _supprimer(self, chemin: str):
         from tkinter import messagebox
-        if messagebox.askyesno(identite.NOM_AFFICHE, "Supprimer cette signature ?", parent=self):
+        if messagebox.askyesno(identite.NOM_AFFICHE, f"Supprimer « {nom(chemin)} » ?", parent=self):
             supprimer(chemin)
             self.remplir()
 

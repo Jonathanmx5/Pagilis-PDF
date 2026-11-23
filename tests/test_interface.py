@@ -1294,12 +1294,22 @@ def test_signature_drawn_then_used_and_remembered(ui, contrat, tmp_path):
         fenetre._debut_trait(_Clic(40, 120))
         for x in range(45, 300, 15):
             fenetre._suite_trait(_Clic(x, 120 - (x % 60)))
+        # Un trait de trop : « Annuler le trait » ne retire que lui.
+        n = len(fenetre.traits)
+        fenetre._debut_trait(_Clic(500, 40))
+        fenetre._suite_trait(_Clic(520, 60))
+        fenetre._fin_trait()
+        fenetre.annuler_trait()
+        assert len(fenetre.traits) == n and fenetre.zone.find_withtag("encre")
+        assert fenetre.libelle.get() == "Signature", "nom proposé"
+        fenetre.epaisseur.set("Épais")
+        fenetre._redessiner()
         fenetre.encre.set("Noire")
         fenetre._changer_encre()
         fenetre.valider()
         yield 100
         assert tampon.image_tampon and os.path.dirname(tampon.image_tampon).endswith("signatures")
-        assert tampon.label_tampon.cget("text") == "Ma signature"
+        assert tampon.label_tampon.cget("text") == "Signature"
         assert 0 < tampon.ratio_tampon < 1
         app._souris_appui(fitz.Point(300, 300))
         app._souris_relache(fitz.Point(300, 300))
@@ -1309,7 +1319,7 @@ def test_signature_drawn_then_used_and_remembered(ui, contrat, tmp_path):
     # Au lancement suivant, la signature est reprise d'office.
     app.destroy()
     autre = creer()
-    assert autre.fonctions["Signature / Tampon"].label_tampon.cget("text") == "Ma signature"
+    assert autre.fonctions["Signature / Tampon"].label_tampon.cget("text") == "Signature"
 
 
 def test_signature_written_with_handwriting_font(ui):
@@ -1329,7 +1339,7 @@ def test_signature_written_with_handwriting_font(ui):
         assert fenetre.apercu.cget("image") is not None
         fenetre.valider()
         yield 100
-        assert tampon.label_tampon.cget("text") == "Ma signature"
+        assert tampon.label_tampon.cget("text") == "Signature"
         with Image.open(tampon.image_tampon) as im:
             assert im.mode == "RGBA" and im.width > im.height
 

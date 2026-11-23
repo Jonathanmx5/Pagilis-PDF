@@ -108,3 +108,30 @@ def test_live_preview_polygons_follow_the_stroke():
     assert sg.polygones_plume([(10, 10)]), "un simple clic laisse une goutte d'encre"
     polygones = sg.polygones_plume([(10, 10), (30, 30), (60, 20)])
     assert polygones and all(len(p) >= 4 for p in polygones)
+
+
+def test_names_kept_next_to_image_and_proposed_in_order(tmp_path):
+    dossier = str(tmp_path)
+    assert sg.nom_propose(dossier) == "Signature"
+    a = sg.enregistrer(sg.image_trace([[(0, 0), (50, 20)]], sg.ENCRES["Noire"]), dossier, "Signature")
+    assert sg.nom(a) == "Signature" and sg.nom_propose(dossier) == "Initiales"
+    sg.nommer(a, "  Paraphe ")
+    assert sg.nom(a) == "Paraphe"
+    sg.nommer(a, "   ")
+    assert sg.nom(a) == "Signature", "nom vide : nom par défaut"
+    sg.supprimer(a)
+    assert os.listdir(os.path.join(dossier, sg.DOSSIER)) == [], "image et nom supprimés ensemble"
+
+
+def test_imported_image_named_after_its_file(tmp_path):
+    from PIL import Image
+    source = tmp_path / "Tampon société.png"
+    Image.new("RGB", (80, 40), "red").save(source)
+    assert sg.nom(sg.importer(str(source), str(tmp_path / "d"))) == "Tampon société"
+
+
+def test_thickness_widens_the_pen():
+    trait = [[(0, 0), (100, 100)]]
+    fin = _encre(sg.image_trace(trait, sg.ENCRES["Noire"], sg.EPAISSEURS["Fin"]))
+    epais = _encre(sg.image_trace(trait, sg.ENCRES["Noire"], sg.EPAISSEURS["Épais"]))
+    assert epais > 1.5 * fin
