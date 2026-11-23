@@ -26,6 +26,7 @@ import pymupdf as fitz
 import conversion
 import fenetres
 import identite
+import signature
 import installation
 import pdf_core as core
 import theme
@@ -273,6 +274,8 @@ class Pagilis(ctk.CTk):
                      text_color=theme.TEXTE_2).pack(pady=(4, 18))
         theme.bouton(centre, "Ouvrir un fichier", self.choisir_pdf, style="principal", icone_nom="ouvrir",
                      hauteur=40, largeur=220).pack()
+        theme.bouton(centre, "Mes signatures", self.mes_signatures, style="secondaire", icone_nom="signer",
+                     hauteur=36, largeur=220).pack(pady=(8, 0))
         self.boutons_recents = [c for c in self.config_data.get("recents", []) if os.path.isfile(c)][:6]
         if self.boutons_recents:
             ctk.CTkLabel(centre, text="Récents", font=theme.police(13, gras=True), text_color=theme.TEXTE,
@@ -287,6 +290,10 @@ class Pagilis(ctk.CTk):
                 ligne.pack(fill="x")
         self.accueil.grid()
         self.accueil.tkraise()
+
+    def mes_signatures(self):
+        """Créer, importer ou supprimer ses signatures, sans avoir de PDF ouvert."""
+        signature.FenetreMesSignatures(self, self.dossier_donnees)
 
     def _retenir_recent(self, chemin: str):
         recents = [c for c in self.config_data.get("recents", []) if os.path.normcase(c) != os.path.normcase(chemin)]

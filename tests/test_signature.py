@@ -46,10 +46,45 @@ def test_missing_fonts_are_skipped(tmp_path):
 
 def test_save_and_reload(tmp_path):
     image = sg.image_trace([[(0, 0), (50, 20)]], sg.ENCRES["Noire"])
-    chemin = sg.enregistrer(image, str(tmp_path / "sous" / "dossier"))
-    assert os.path.basename(chemin) == sg.NOM_FICHIER and os.path.isfile(chemin)
-    assert sg.signature_enregistree(str(tmp_path / "sous" / "dossier")) == chemin
+    dossier = str(tmp_path / "sous" / "dossier")
+    chemin = sg.enregistrer(image, dossier)
+    assert os.path.isfile(chemin) and os.path.dirname(chemin).endswith(sg.DOSSIER)
+    assert sg.signature_enregistree(dossier) == chemin
     assert sg.signature_enregistree(str(tmp_path / "vide")) is None
+
+
+def test_several_signatures_kept_newest_first(tmp_path):
+    dossier = str(tmp_path)
+    signature = sg.enregistrer(sg.image_trace([[(0, 0), (50, 20)]], sg.ENCRES["Noire"]), dossier)
+    initiales = sg.enregistrer(sg.image_trace([[(0, 0), (10, 20)]], sg.ENCRES["Bleue"]), dossier)
+    os.utime(signature, (1, 1))
+    assert sg.liste(dossier) == [initiales, signature]
+    sg.supprimer(signature)
+    sg.supprimer(signature)  # déjà supprimée : sans erreur
+    assert sg.liste(dossier) == [initiales]
+
+
+def test_import_image_and_reject_unreadable(tmp_path):
+    from PIL import Image
+    tampon = tmp_path / "tampon.jpg"
+    Image.new("RGB", (120, 60), "red").save(tampon)
+    chemin = sg.importer(str(tampon), str(tmp_path / "donnees"))
+    assert chemin.endswith(".png") and sg.liste(str(tmp_path / "donnees")) == [chemin]
+    faux = tmp_path / "faux.png"
+    faux.write_bytes(b"pas une image")
+    try:
+        sg.importer(str(faux), str(tmp_path / "donnees"))
+        assert False, "image illisible refusée"
+    except OSError:
+        pass
+    assert len(sg.liste(str(tmp_path / "donnees"))) == 1
+
+
+def test_old_single_signature_moves_into_library(tmp_path):
+    ancienne = tmp_path / sg.NOM_FICHIER
+    sg.image_trace([[(0, 0), (50, 20)]], sg.ENCRES["Noire"]).save(ancienne)
+    gardees = sg.liste(str(tmp_path))
+    assert len(gardees) == 1 and not ancienne.exists()
 
 
 def _encre(image):

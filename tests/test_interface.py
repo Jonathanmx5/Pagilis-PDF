@@ -254,7 +254,6 @@ def test_replace_all_from_modifier_is_undoable(ui, contrat):
 def test_stamp_click_drag_then_applied_on_displayed_page(ui, contrat, signature, tmp_path):
     s, creer, d = ui
     app = creer()
-    sortie = tmp_path / "signe.pdf"
 
     def scenario():
         app.charger_fichier(str(contrat))
@@ -269,13 +268,15 @@ def test_stamp_click_drag_then_applied_on_displayed_page(ui, contrat, signature,
         rect = app.fonctions["Signature / Tampon"]._rect_tampon()
         assert abs(rect.x0 + rect.width / 2 - 330) < 1 and abs(rect.y0 + rect.height / 2 - 250) < 1
         assert len(superpositions(app)) >= 2  # image + cadre en surimpression
-        d.enregistrer_sous = str(sortie)
         app.fonctions["Signature / Tampon"].lancer_tampon()
-        yield TRAVAUX
-        resultat = fitz.open(sortie)
+        # Posée sur la copie de travail : annulable, à enregistrer avec Ctrl+S.
+        resultat = app.edition.doc
         assert not resultat[0].get_images() and resultat[1].get_images(), "tampon sur la page affichée (2)"
         pose = core.to_displayed(resultat[1], resultat[1].get_image_rects(resultat[1].get_images()[0][0])[0])
         assert abs(pose.x0 - rect.x0) < 1 and abs(pose.y0 - rect.y0) < 1
+        assert app.edition.modifie and "Enregistrez" in app.etat.cget("text")
+        app.fonctions["Signature / Tampon"].annuler_retouche()
+        assert not app.edition.doc[1].get_images(), "Ctrl+Z retire la signature"
 
     executer(app, scenario)
 
@@ -1297,7 +1298,7 @@ def test_signature_drawn_then_used_and_remembered(ui, contrat, tmp_path):
         fenetre._changer_encre()
         fenetre.valider()
         yield 100
-        assert tampon.image_tampon and os.path.basename(tampon.image_tampon) == "signature.png"
+        assert tampon.image_tampon and os.path.dirname(tampon.image_tampon).endswith("signatures")
         assert tampon.label_tampon.cget("text") == "Ma signature"
         assert 0 < tampon.ratio_tampon < 1
         app._souris_appui(fitz.Point(300, 300))
@@ -1331,6 +1332,63 @@ def test_signature_written_with_handwriting_font(ui):
         assert tampon.label_tampon.cget("text") == "Ma signature"
         with Image.open(tampon.image_tampon) as im:
             assert im.mode == "RGBA" and im.width > im.height
+
+    executer(app, scenario)
+
+
+def test_signature_box_traced_named_then_signed_with_a_click(ui, contrat, signature):
+    import cases
+    import signature as sg
+    s, creer, d = ui
+    app = creer()
+    tampon = app.fonctions["Signature / Tampon"]
+
+    def scenario():
+        app.charger_fichier(str(contrat))
+        app.afficher_page("Signature / Tampon")
+        yield 300
+        tampon.basculer_tracer()
+        assert tampon.tracer and tampon.bouton_tracer.cget("text") == "Arrêter de tracer"
+        d.mot_de_passe = "Client"  # réponse à « Qui signe ici ? »
+        app._souris_appui(fitz.Point(320, 700))
+        app._souris_glisse(fitz.Point(520, 760))
+        assert superpositions(app), "cadre affiché pendant le tracé"
+        app._souris_relache(fitz.Point(520, 760))
+        vides = cases.cases_vides(app.edition.doc[0])
+        assert [c.nom for c in vides] == ["Client"] and app.edition.modifie
+        assert "1 case(s)" in tampon.label_cases.cget("text")
+        yield 300
+        assert app.apercu.canevas.find_withtag("all"), "aperçu redessiné"
+        textes = [app.apercu.canevas.itemcget(i, "text") for i in app.apercu.canevas.find_all()
+                  if app.apercu.canevas.type(i) == "text"]
+        assert "Signer ici : Client" in textes, "étiquette française dans l'aperçu"
+
+        tampon.basculer_tracer()
+        sg.importer(str(signature), app.dossier_donnees)  # une seule signature gardée : pas de choix
+        app._souris_appui(fitz.Point(420, 730))
+        app._souris_relache(fitz.Point(420, 730))
+        assert cases.nombre_vides(app.edition.doc) == 0
+        assert app.edition.doc[0].get_images(), "signature posée dans la case"
+        assert "signée" in app.etat.cget("text")
+        tampon.annuler_retouche()
+        assert cases.nombre_vides(app.edition.doc) == 1, "Ctrl+Z rend la case"
+
+    executer(app, scenario)
+
+
+def test_my_signatures_window_opens_from_home_without_pdf(ui, signature):
+    import signature as sg
+    s, creer, d = ui
+    app = creer()
+
+    def scenario():
+        yield 200
+        sg.importer(str(signature), app.dossier_donnees)
+        app.mes_signatures()
+        yield 300
+        fenetre = next(w for w in app.winfo_children() if isinstance(w, sg.FenetreMesSignatures))
+        assert len(fenetre._images) == 1
+        fenetre.destroy()
 
     executer(app, scenario)
 

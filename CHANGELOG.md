@@ -11,6 +11,12 @@ Numérotation : MAJEUR.MINEUR.CORRECTIF.
 Une bêta (tag `v1.2.0-beta.1`) reprend les notes de sa version (`1.2.0`) si
 elle n'a pas de section propre.
 
+## [1.11.0]
+
+- Mes signatures : gardez plusieurs signatures (signature complète, initiales, tampon). Créez-les, importez une image ou supprimez-les depuis l'accueil, même sans PDF ouvert.
+- Cases de signature : tracez une case « Signer ici : Client » pour la personne qui recevra le PDF. Elle est reconnue par Adobe, Aperçu et les navigateurs. Cliquez dans une case pour la signer : la signature s'y ajuste.
+- Signer fonctionne maintenant comme Modifier et Pages : chaque signature posée s'annule (Ctrl+Z), et « Enregistrer » garde le tout en une fois.
+
 ## [1.10.0]
 
 - Modifier : ajoutez du texte n'importe où sur la page (date, mention, champ de formulaire), en noir ou en bleu, en 4 tailles. Ctrl+Z l'annule.

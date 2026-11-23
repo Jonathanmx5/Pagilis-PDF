@@ -60,8 +60,8 @@ détour.** Vous ouvrez le document, vous faites la retouche, vous enregistrez. V
 | | Fonction | 💻 PC | 📱 Android |
 |---|---|:---:|:---:|
 | 🖋️ | **Signer** : signature tracée à la main (trait de stylo plume), ou tampon PNG transparent | ✅ | ✅ |
-| ✍️ | **Plusieurs signatures gardées** (signature complète, initiales, tampon), créées même sans PDF ouvert | | ✅ |
-| ▭ | **Cases de signature** : préparez « Signer ici : Client », remplissez la vôtre d'un toucher | | ✅ |
+| ✍️ | **Plusieurs signatures gardées** (signature complète, initiales, tampon), créées même sans PDF ouvert | ✅ | ✅ |
+| ▭ | **Cases de signature** : préparez « Signer ici : Client », remplissez la vôtre d'un clic | ✅ | ✅ |
 | ✏️ | **Corriger le texte existant** : cliquez sur la ligne, tapez, la police d'origine est gardée | ✅ | |
 | 🔤 | **Ajouter du texte** : date, « Lu et approuvé », mention en un geste | ✅ | ✅ |
 | 📋 | **Remplir les formulaires PDF** : champs, cases à cocher, listes | | ✅ |

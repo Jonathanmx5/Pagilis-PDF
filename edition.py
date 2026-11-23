@@ -13,6 +13,7 @@ from collections import deque
 
 import pymupdf as fitz
 
+import cases
 import pdf_core as core
 
 
@@ -115,6 +116,21 @@ class Edition:
     def inserer(self, chemin: str, apres: int | None = None) -> list[int]:
         """Insère un PDF après la page `apres` (à la fin si None) ; retourne les pages insérées."""
         return self._retoucher(lambda: core.insert_pdf(self.doc, chemin, apres))
+
+    # Signer (fonction « Signer ») : tampons et cases de signature, annulables aussi.
+
+    def poser(self, image: str, pages: list[int], opts: core.StampOptions) -> int:
+        """Pose une image (signature, tampon) sur les pages ; retourne leur nombre."""
+        def action():
+            core.add_stamp(self.doc, image, pages, opts)
+            return len(pages)
+        return self._retoucher(action)
+
+    def creer_case(self, page: int, rect: fitz.Rect, nom: str) -> bool:
+        return self._retoucher(lambda: cases.creer_case(self.doc, page, rect, nom))
+
+    def signer_case(self, page: int, xref: int, image: str) -> bool:
+        return self._retoucher(lambda: cases.signer_case(self.doc, page, xref, image))
 
     def annuler(self) -> fitz.Document:
         """Revient à l'état d'avant la dernière retouche. IndexError s'il n'y en a pas."""

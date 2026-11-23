@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import os
+import time
 import tkinter as tk
 from typing import Callable
 
@@ -18,7 +19,8 @@ from PIL import Image, ImageDraw, ImageFont
 import identite
 import theme
 
-NOM_FICHIER = "signature.png"
+NOM_FICHIER = "signature.png"      # ancienne signature unique, reprise dans la bibliothèque
+DOSSIER = "signatures"            # bibliothèque : signature, initiales, tampons…
 ECHELLE = 3          # l'image est dessinée 3 fois plus fine que l'écran : nette à l'impression
 MARGE = 6            # marge autour du tracé, en pixels écran
 EPAISSEUR = 3        # épaisseur du trait, en pixels écran (aperçu de l'onglet Écrire)
@@ -130,16 +132,55 @@ def image_texte(texte: str, chemin_police: str, encre: tuple[int, int, int],
     return _rogner(image, taille // 10)
 
 
+def _bibliotheque(dossier: str) -> str:
+    """Dossier des signatures ; l'ancienne signature unique y est reprise une fois."""
+    biblio = os.path.join(dossier, DOSSIER)
+    os.makedirs(biblio, exist_ok=True)
+    ancienne = os.path.join(dossier, NOM_FICHIER)
+    if os.path.isfile(ancienne):
+        os.replace(ancienne, _nouveau_chemin(biblio, os.path.getmtime(ancienne)))
+    return biblio
+
+
+def _nouveau_chemin(biblio: str, quand: float | None = None) -> str:
+    base = int((quand if quand is not None else time.time()) * 1000)
+    while os.path.exists(os.path.join(biblio, f"{base}.png")):
+        base += 1
+    return os.path.join(biblio, f"{base}.png")
+
+
+def liste(dossier: str) -> list[str]:
+    """Les signatures gardées, la plus récente d'abord."""
+    biblio = _bibliotheque(dossier)
+    chemins = [os.path.join(biblio, n) for n in os.listdir(biblio) if n.lower().endswith(".png")]
+    return sorted(chemins, key=lambda c: (os.path.getmtime(c), c), reverse=True)
+
+
 def enregistrer(image: Image.Image, dossier: str) -> str:
-    os.makedirs(dossier, exist_ok=True)
-    chemin = os.path.join(dossier, NOM_FICHIER)
-    image.save(chemin)
+    """Ajoute une signature à la bibliothèque ; retourne son chemin."""
+    chemin = _nouveau_chemin(_bibliotheque(dossier))
+    image.save(chemin + ".part", format="PNG")
+    os.replace(chemin + ".part", chemin)
     return chemin
 
 
+def importer(source: str, dossier: str) -> str:
+    """Copie une image (signature scannée, tampon) dans la bibliothèque. OSError si illisible."""
+    with Image.open(source) as im:
+        image = im.convert("RGBA")
+    return enregistrer(image, dossier)
+
+
+def supprimer(chemin: str) -> None:
+    try:
+        os.remove(chemin)
+    except FileNotFoundError:
+        pass
+
+
 def signature_enregistree(dossier: str) -> str | None:
-    chemin = os.path.join(dossier, NOM_FICHIER)
-    return chemin if os.path.isfile(chemin) else None
+    """La dernière signature gardée, s'il y en a une."""
+    return next(iter(liste(dossier)), None)
 
 
 class FenetreSignature(ctk.CTkToplevel):
@@ -161,7 +202,7 @@ class FenetreSignature(ctk.CTkToplevel):
 
         ctk.CTkLabel(self, text="Créer ma signature", font=theme.police(18, gras=True),
                      text_color=theme.TEXTE).pack(anchor="w", padx=24, pady=(20, 2))
-        ctk.CTkLabel(self, text="Elle sera gardée sur ce PC et proposée à chaque signature.",
+        ctk.CTkLabel(self, text="Elle sera gardée sur ce PC avec vos autres signatures (initiales, tampon…).",
                      font=theme.police(12), text_color=theme.TEXTE_2).pack(anchor="w", padx=24)
 
         self.onglets = ctk.CTkTabview(self, fg_color=theme.SURFACE, height=290,
@@ -285,3 +326,103 @@ class FenetreSignature(ctk.CTkToplevel):
         chemin = enregistrer(image, self.dossier)
         self.destroy()
         self.a_la_fin(chemin)
+
+
+class FenetreMesSignatures(ctk.CTkToplevel):
+    """« Mes signatures » : les signatures gardées (signature, initiales, tampon…).
+
+    Ouverte depuis l'accueil (sans PDF) pour les gérer, ou depuis « Signer » pour
+    en choisir une : `choisir` reçoit alors le chemin de l'image cliquée.
+    """
+
+    COLONNES, VIGNETTE = 3, (190, 84)
+
+    def __init__(self, parent, dossier: str, choisir: Callable[[str], None] | None = None,
+                 titre: str = "Mes signatures"):
+        super().__init__(parent)
+        self.dossier, self.choisir = dossier, choisir
+        self.title(f"{titre} — {identite.NOM_AFFICHE}")
+        theme.poser_icone(self)
+        self.configure(fg_color=theme.FOND)
+        self.geometry("700x520")
+        self.minsize(640, 420)
+        self.transient(parent)
+        self._images = []
+
+        ctk.CTkLabel(self, text=titre, font=theme.police(18, gras=True),
+                     text_color=theme.TEXTE).pack(anchor="w", padx=24, pady=(20, 2))
+        aide = ("Cliquez sur une signature pour l'utiliser." if choisir else
+                "Gardez ici votre signature, vos initiales, un tampon… Elles sont proposées à chaque signature.")
+        ctk.CTkLabel(self, text=aide, font=theme.police(12), text_color=theme.TEXTE_2).pack(anchor="w", padx=24)
+        self.grille = ctk.CTkScrollableFrame(self, fg_color=theme.SURFACE, corner_radius=8)
+        self.grille.pack(fill="both", expand=True, padx=24, pady=12)
+        for c in range(self.COLONNES):
+            self.grille.grid_columnconfigure(c, weight=1)
+
+        pied = ctk.CTkFrame(self, fg_color="transparent")
+        pied.pack(fill="x", padx=24, pady=(0, 20))
+        theme.bouton(pied, "Nouvelle signature…", self.nouvelle, style="principal", icone_nom="signer").pack(side="left")
+        theme.bouton(pied, "Importer une image…", self.importer, icone_nom="ouvrir").pack(side="left", padx=8)
+        theme.bouton(pied, "Fermer", self.destroy, style="secondaire").pack(side="right")
+        self.remplir()
+        self.after(50, self.grab_set)
+
+    def remplir(self):
+        for enfant in self.grille.winfo_children():
+            enfant.destroy()
+        self._images.clear()
+        chemins = liste(self.dossier)
+        if not chemins:
+            ctk.CTkLabel(self.grille, text="Aucune signature pour l'instant.\nCréez-en une, ou importez "
+                         "une image (signature scannée, tampon).", font=theme.police(13),
+                         text_color=theme.TEXTE_2, justify="center").grid(row=0, column=0, columnspan=self.COLONNES,
+                                                                         pady=60)
+            return
+        for i, chemin in enumerate(chemins):
+            case = ctk.CTkFrame(self.grille, fg_color=theme.SURFACE_2, corner_radius=8)
+            case.grid(row=i // self.COLONNES, column=i % self.COLONNES, padx=6, pady=6, sticky="nsew")
+            try:
+                with Image.open(chemin) as im:
+                    fond = Image.new("RGBA", im.size, "white")
+                    fond.alpha_composite(im.convert("RGBA"))
+            except OSError:
+                continue
+            fond.thumbnail(self.VIGNETTE)
+            image = ctk.CTkImage(fond, size=fond.size)
+            self._images.append(image)
+            vignette = ctk.CTkButton(case, text="", image=image, fg_color="white", hover_color="#dfe7fb",
+                                     width=self.VIGNETTE[0] + 12, height=self.VIGNETTE[1] + 12, corner_radius=6,
+                                     command=(lambda c=chemin: self._utiliser(c)) if self.choisir else None)
+            vignette.pack(padx=8, pady=(8, 4))
+            theme.bouton(case, "Supprimer", lambda c=chemin: self._supprimer(c), style="discret",
+                         icone_nom="supprimer", hauteur=26).pack(pady=(0, 6))
+
+    def _utiliser(self, chemin: str):
+        self.destroy()
+        self.choisir(chemin)
+
+    def _supprimer(self, chemin: str):
+        from tkinter import messagebox
+        if messagebox.askyesno(identite.NOM_AFFICHE, "Supprimer cette signature ?", parent=self):
+            supprimer(chemin)
+            self.remplir()
+
+    def nouvelle(self):
+        FenetreSignature(self, self.dossier, lambda chemin: self._apres_ajout(chemin))
+
+    def importer(self):
+        from tkinter import filedialog, messagebox
+        source = filedialog.askopenfilename(parent=self, filetypes=[("Images", "*.png *.jpg *.jpeg")])
+        if not source:
+            return
+        try:
+            chemin = importer(source, self.dossier)
+        except OSError:
+            return messagebox.showerror(identite.NOM_AFFICHE, "Image illisible.", parent=self)
+        self._apres_ajout(chemin)
+
+    def _apres_ajout(self, chemin: str):
+        if self.choisir:
+            return self._utiliser(chemin)
+        self.remplir()
+        self.grab_set()

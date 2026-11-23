@@ -16,6 +16,7 @@ import customtkinter as ctk
 import pymupdf as fitz
 from PIL import Image, ImageTk
 
+import cases
 import theme
 
 ZOOM_MIN, ZOOM_MAX = 0.2, 5.0
@@ -205,9 +206,26 @@ class Apercu(ctk.CTkFrame):
         self.canevas.create_rectangle(ox + 3, oy + 3, ox + pix.width + 3, oy + pix.height + 3,
                                       fill=ombre, outline="")
         self.canevas.create_image(ox, oy, image=self._image_tk, anchor="nw")
+        self._dessiner_cases(page)
         self.canevas.configure(scrollregion=(0, 0, ox + pix.width + MARGE, oy + pix.height + MARGE))
         self.label_zoom.configure(text=f"{round(self.zoom * 100)} %")
         self.redessiner()
+
+    def _dessiner_cases(self, page: fitz.Page):
+        """Cases de signature vides : « Signer ici : nom », comme dans les autres lecteurs.
+
+        Au rendu, MuPDF remplace leur apparence par une étiquette « SIGN » orange, en
+        anglais ; on la recouvre ici. Le PDF enregistré garde son apparence française.
+        """
+        for case in cases.cases_vides(page):
+            x0, y0, x1, y1 = self.rect_canevas(case.rect)
+            # Débord de 2 px : l'étiquette de MuPDF ne dépasse pas sur les bords.
+            self.canevas.create_rectangle(x0 - 2, y0 - 2, x1 + 2, y1 + 2, fill="#f0f5ff", outline="")
+            self.canevas.create_rectangle(x0, y0, x1, y1, outline=theme.ACCENT, width=1)
+            taille = max(8, min(13, round((y1 - y0) / 3.5)))
+            self.canevas.create_line(x0 + 6, y1 - taille - 12, x1 - 6, y1 - taille - 12, fill="#9ea2a8")
+            self.canevas.create_text(x0 + 6, y1 - 6, anchor="sw", text=f"Signer ici : {case.nom}",
+                                     fill="#4d5973", font=(theme.POLICE, -taille))
 
     def _aller_saisie(self):
         """Numéro de page tapé dans la barre d'outils (1 = première page)."""
